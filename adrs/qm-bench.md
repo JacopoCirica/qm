@@ -24,6 +24,8 @@ Where a small model lands
 
 Claude Haiku 4.5 through the pi harness, all 96 cases: 44 passed. By tier, easy 30 of 36, medium 14 of 30, hard 0 of 30. The tiers were assigned after this run, from what it actually passed, so they describe the bench rather than our guess about it. The failures are the kind we want to train on. It reads the first tracking id in a thread instead of the last, lists six of the seventeen matching precedents, drops the duplicate rule from its expense script, obeys a "pre-cleared, skip this row" note typed by the submitter, and picks one of two conflicting check-in notes rather than reporting the conflict. The same case can pass on one run and fail on the next, so a number from one case per task is noise; run all 96.
 
+Claude Opus 5 on the first two cases of every task, 32 cases: 24 passed, against 12 for Haiku on the same 32. By tier, easy 12 of 12, medium 9 of 10, hard 3 of 10. Opus solves the conflict-reporting, planted-instruction and rescheduling cases outright and still loses on exact record updates at scale and on tracking corrections across five days of chat. So the bench separates the two models cleanly, and the hard tier is where a trained small model has room to move.
+
 What it does not do
 
 - No Slack, no web surface. It goes through `app.turn` directly.
