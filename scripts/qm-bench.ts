@@ -185,7 +185,8 @@ try {
 } finally {
   await env.close();
 }
-const errored = records.filter((r) => r.error !== null).length;
+const graded = records.filter((r) => r.error === null);
+const errored = records.length - graded.length;
 
 interface TaskSummary {
   family: string;
@@ -199,12 +200,14 @@ interface TaskSummary {
   pass_rate: number | null;
   mean_partial: number | null;
   cases: Array<{ case: string; reward: number; partial: number; turns: number }>;
+  execution_failures: string[];
 }
 
 const perTask: Record<string, TaskSummary> = {};
 for (const task of allTasks()) {
-  const rs = records.filter((r) => r.task === task.id);
-  if (rs.length === 0) continue;
+  const rs = graded.filter((r) => r.task === task.id);
+  const failedCases = records.filter((r) => r.task === task.id && r.error !== null).map((r) => r.case);
+  if (rs.length === 0 && failedCases.length === 0) continue;
   perTask[task.id] = {
     family: task.family,
     difficulty: task.difficulty,
@@ -217,6 +220,7 @@ for (const task of allTasks()) {
     pass_rate: mean(rs.map((r) => r.reward)),
     mean_partial: mean(rs.map((r) => r.partial)),
     cases: rs.map((r) => ({ case: r.case, reward: r.reward, partial: r.partial, turns: r.turns })),
+    execution_failures: failedCases,
   };
 }
 const summary = {
@@ -226,16 +230,17 @@ const summary = {
   dataset: datasetDir ?? "generators",
   cases_per_task: variants.length,
   finished_at: new Date().toISOString(),
-  pass_rate: mean(records.map((r) => r.reward)),
+  pass_rate: mean(graded.map((r) => r.reward)),
   pass_rate_by_difficulty: Object.fromEntries(
-    ["easy", "medium", "hard"].map((d) => [d, mean(records.filter((r) => r.difficulty === d).map((r) => r.reward))]),
+    ["easy", "medium", "hard"].map((d) => [d, mean(graded.filter((r) => r.difficulty === d).map((r) => r.reward))]),
   ),
-  mean_partial: mean(records.map((r) => r.partial)),
+  mean_partial: mean(graded.map((r) => r.partial)),
+  graded_cases: graded.length,
   execution_failures: errored,
   tasks: perTask,
 };
 writeFileSync(join(outDir, "summary.json"), JSON.stringify(summary, null, 2));
 console.log(
-  `pass rate ${summary.pass_rate} (mean partial ${summary.mean_partial}) over ${records.length} cases, ${errored} execution failures; wrote ${outDir}`,
+  `pass rate ${summary.pass_rate} (mean partial ${summary.mean_partial}) over ${graded.length} graded cases, ${errored} execution failures left out; wrote ${outDir}`,
 );
 process.exit(errored === 0 ? 0 : 2);

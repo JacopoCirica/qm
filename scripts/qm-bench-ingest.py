@@ -95,6 +95,8 @@ def run_payload(slug: str, row: dict[str, object], summary: dict[str, object], r
     cases = []
     for bench_case in bench_cases:
         record = json.loads((run_dir / slug / f"{bench_case['case']}.json").read_text())
+        if record.get("error") is not None:
+            raise ValueError(f"{bench_case['case']} is an execution failure; summary.json must not list it under cases")
         final = [m for m in record["messages"] if m.get("role") == "assistant"]
         cases.append(
             {
@@ -117,7 +119,12 @@ def run_payload(slug: str, row: dict[str, object], summary: dict[str, object], r
         "grading": "qm-bench verifier check mean",
         "metric": "check mean",
         "output_location": str(run_dir),
-        "metrics": {"cases": len(cases), "base_url": summary["base_url"], "run_id": run_dir.name},
+        "metrics": {
+            "cases": len(cases),
+            "execution_failures": len(row["execution_failures"]),
+            "base_url": summary["base_url"],
+            "run_id": run_dir.name,
+        },
         "source": SOURCE,
         "finished_at": summary["finished_at"],
         "cases": cases,
