@@ -92,6 +92,9 @@ def run_payload(slug: str, row: dict[str, object], summary: dict[str, object], r
     bench_cases = row["cases"]
     if not isinstance(bench_cases, list):
         raise TypeError(f"{slug}: summary.json cases must be a list")
+    execution_failures = row["execution_failures"]
+    if not isinstance(execution_failures, list):
+        raise TypeError(f"{slug}: summary.json execution_failures must be a list")
     cases = []
     for bench_case in bench_cases:
         record = json.loads((run_dir / slug / f"{bench_case['case']}.json").read_text())
@@ -121,7 +124,7 @@ def run_payload(slug: str, row: dict[str, object], summary: dict[str, object], r
         "output_location": str(run_dir),
         "metrics": {
             "cases": len(cases),
-            "execution_failures": len(row["execution_failures"]),
+            "execution_failures": len(execution_failures),
             "base_url": summary["base_url"],
             "run_id": run_dir.name,
         },
