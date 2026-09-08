@@ -112,10 +112,14 @@ def run_payload(slug: str, row: dict[str, object], summary: dict[str, object], r
         )
     # dataset/metric/grading are constant across tasks so the family rollup
     # is "comparable" (services/workflows.family_summary).
+    pass_rate = row["pass_rate"]
+    graded = isinstance(pass_rate, (int, float))
+    if not graded and not execution_failures:
+        raise ValueError(f"{slug}: no graded cases and no execution failures")
     return {
         "model": str(summary["model"])[:64],
-        "overall_score": row["pass_rate"],
-        "status": "completed",
+        "overall_score": float(pass_rate) if graded else 0.0,
+        "status": "completed" if graded else "failed",
         "variant": cfg.variant,
         "reference_label": cfg.reference_label,
         "dataset_eval": f"qm-bench@{TAXONOMY_VERSION}",
@@ -145,7 +149,9 @@ def main(cfg: Config) -> None:
     tasks = summary["tasks"]
     if not isinstance(tasks, dict):
         raise TypeError("summary.json: tasks must be an object")
-    scored = {slug: row for slug, row in tasks.items() if row.get("pass_rate") is not None}
+    scored = {
+        slug: row for slug, row in tasks.items() if row.get("pass_rate") is not None or row.get("execution_failures")
+    }
     posts: list[tuple[str, dict[str, object]]] = []
     for family in sorted({str(row["family"]) for row in scored.values()}):
         posts.append(("/v1/eval-groups", group_payload(family)))
