@@ -84,11 +84,16 @@ def task_payload(slug: str, row: dict[str, object]) -> dict[str, object]:
             "target_systems": TARGET_SYSTEMS,
             "skills": [],
         },
-        "criteria": [{"id": str(c), "question": f"Check `{c}` in the task's verifier scores 1.0"} for c in checks],
+        "criteria": [
+            {"id": str(c), "question": f"Check `{c}` in the task's verifier scores 1.0"}
+            for c in checks
+        ],
     }
 
 
-def run_payload(slug: str, row: dict[str, object], summary: dict[str, object], run_dir: Path, cfg: Config) -> dict[str, object]:
+def run_payload(
+    slug: str, row: dict[str, object], summary: dict[str, object], run_dir: Path, cfg: Config
+) -> dict[str, object]:
     bench_cases = row["cases"]
     if not isinstance(bench_cases, list):
         raise TypeError(f"{slug}: summary.json cases must be a list")
@@ -99,7 +104,9 @@ def run_payload(slug: str, row: dict[str, object], summary: dict[str, object], r
     for bench_case in bench_cases:
         record = json.loads((run_dir / slug / f"{bench_case['case']}.json").read_text())
         if record.get("error") is not None:
-            raise ValueError(f"{bench_case['case']} is an execution failure; summary.json must not list it under cases")
+            raise ValueError(
+                f"{bench_case['case']} is an execution failure; summary.json must not list it under cases"
+            )
         final = [m for m in record["messages"] if m.get("role") == "assistant"]
         cases.append(
             {
@@ -113,13 +120,13 @@ def run_payload(slug: str, row: dict[str, object], summary: dict[str, object], r
     # dataset/metric/grading are constant across tasks so the family rollup
     # is "comparable" (services/workflows.family_summary).
     pass_rate = row["pass_rate"]
-    graded = isinstance(pass_rate, (int, float))
-    if not graded and not execution_failures:
+    if not isinstance(pass_rate, (int, float)) and not execution_failures:
         raise ValueError(f"{slug}: no graded cases and no execution failures")
+    overall_score = float(pass_rate) if isinstance(pass_rate, (int, float)) else 0.0
     return {
         "model": str(summary["model"])[:64],
-        "overall_score": float(pass_rate) if graded else 0.0,
-        "status": "completed" if graded else "failed",
+        "overall_score": overall_score,
+        "status": "completed" if isinstance(pass_rate, (int, float)) else "failed",
         "variant": cfg.variant,
         "reference_label": cfg.reference_label,
         "dataset_eval": f"qm-bench@{TAXONOMY_VERSION}",
@@ -141,7 +148,9 @@ def run_payload(slug: str, row: dict[str, object], summary: dict[str, object], r
 def main(cfg: Config) -> None:
     run_dir = Path(cfg.run_dir)
     if not (run_dir / "summary.json").exists():
-        raise SystemExit(f"no summary.json in {run_dir}; pass run_dir=<qm repo>/runs/qm-bench/<run_id>")
+        raise SystemExit(
+            f"no summary.json in {run_dir}; pass run_dir=<qm repo>/runs/qm-bench/<run_id>"
+        )
     summary = json.loads((run_dir / "summary.json").read_text())
     api_key = os.environ.get(API_KEY_ENV, "")
     if not cfg.dry_run and not api_key:
@@ -150,7 +159,9 @@ def main(cfg: Config) -> None:
     if not isinstance(tasks, dict):
         raise TypeError("summary.json: tasks must be an object")
     scored = {
-        slug: row for slug, row in tasks.items() if row.get("pass_rate") is not None or row.get("execution_failures")
+        slug: row
+        for slug, row in tasks.items()
+        if row.get("pass_rate") is not None or row.get("execution_failures")
     }
     posts: list[tuple[str, dict[str, object]]] = []
     for family in sorted({str(row["family"]) for row in scored.values()}):
@@ -160,12 +171,16 @@ def main(cfg: Config) -> None:
     for slug, row in scored.items():
         posts.append((f"/v1/evals/{slug}/runs", run_payload(slug, row, summary, run_dir, cfg)))
     mode = "DRY RUN" if cfg.dry_run else "LIVE"
-    print(f"{mode} -> {cfg.api_base}: {len(scored)} tasks, model={summary['model']}, reference_label={cfg.reference_label!r}")
+    print(
+        f"{mode} -> {cfg.api_base}: {len(scored)} tasks, model={summary['model']}, reference_label={cfg.reference_label!r}"
+    )
     for path, body in posts:
         print(f"  POST {path} {json.dumps(body)[:160]}")
     if cfg.dry_run:
         return
-    with httpx.Client(base_url=cfg.api_base, headers={"Authorization": f"Bearer {api_key}"}, timeout=60) as client:
+    with httpx.Client(
+        base_url=cfg.api_base, headers={"Authorization": f"Bearer {api_key}"}, timeout=60
+    ) as client:
         for path, body in posts:
             resp = client.post(path, json=body)
             if resp.status_code >= 400:
