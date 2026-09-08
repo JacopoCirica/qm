@@ -4,8 +4,8 @@ import type { Config } from "../src/config.ts";
 import { errMessage } from "../src/util/errors.ts";
 import { buildCases, loadCases, type BenchCase } from "../src/bench/dataset.ts";
 import { qmLocalEnvironment, type Environment } from "../src/bench/environments/qm-local.ts";
-import { grade } from "../src/bench/core/types.ts";
-import { allTasks, verifierFor } from "../src/bench/registry.ts";
+import { grade, memoryOutputs, type BenchTask } from "../src/bench/core/types.ts";
+import { allTasks, goldOutputs, verifierFor } from "../src/bench/registry.ts";
 
 const modelId = process.env.PI_MODEL;
 if (!modelId) {
@@ -148,6 +148,12 @@ async function runCaseWithBackoff(env: Environment, benchCase: BenchCase): Promi
   }
 }
 
+async function checkIds(task: BenchTask): Promise<string[]> {
+  const fixture = task.generate(1);
+  const graded = await grade(task, memoryOutputs(goldOutputs(task, fixture)), fixture.key);
+  return graded.checks.map((c) => c.id);
+}
+
 function mean(ns: number[]): number | null {
   return ns.length === 0 ? null : Math.round((ns.reduce((s, n) => s + n, 0) / ns.length) * 10000) / 10000;
 }
@@ -216,7 +222,7 @@ for (const task of allTasks()) {
     sources: task.sources,
     prompt: cases.find((c) => c.task === task.id)?.prompt ?? "",
     outputs: task.outputs,
-    checks: [...new Set(rs.flatMap((r) => r.checks.map((c) => c.id)))],
+    checks: await checkIds(task),
     pass_rate: mean(rs.map((r) => r.reward)),
     mean_partial: mean(rs.map((r) => r.partial)),
     cases: rs.map((r) => ({ case: r.case, reward: r.reward, partial: r.partial, turns: r.turns })),
