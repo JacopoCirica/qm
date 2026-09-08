@@ -90,24 +90,36 @@ export function generate(seed: number): Fixture<ChangesKey> {
   const companyLoad = new Map<string, number>();
   const byId = new Map(finalWorld.attendees.map((a) => [a.id, a] as const));
   const capOf = new Map(finalWorld.sessions.map((s) => [s.id, s.capacity] as const));
-  for (const [k, sid] of [...before].sort()) {
+  const rankOf = (a: Attendee, sid: string): number => {
+    const i = a.prefs.indexOf(sid);
+    return i === -1 ? a.prefs.length : i;
+  };
+  const seated = new Map<string, Array<[string, Attendee]>>();
+  for (const [k, sid] of before) {
     const a = byId.get(k.split("|")[0]!);
     if (!a) continue;
     if (allCancelled.includes(sid)) {
       mustMove.add(k);
       continue;
     }
-    const ck = `${sid}|${a.company}`;
-    if (
-      (load.get(sid) ?? 0) >= (capOf.get(sid) ?? 0) ||
-      (companyLoad.get(ck) ?? 0) >= companyCap(capOf.get(sid) ?? 0)
-    ) {
-      mustMove.add(k);
-      continue;
+    if (!seated.has(sid)) seated.set(sid, []);
+    seated.get(sid)!.push([k, a]);
+  }
+  for (const [sid, entries] of seated) {
+    entries.sort(([ka, a], [kb, b]) => rankOf(a, sid) - rankOf(b, sid) || ka.localeCompare(kb));
+    for (const [k, a] of entries) {
+      const ck = `${sid}|${a.company}`;
+      if (
+        (load.get(sid) ?? 0) >= (capOf.get(sid) ?? 0) ||
+        (companyLoad.get(ck) ?? 0) >= companyCap(capOf.get(sid) ?? 0)
+      ) {
+        mustMove.add(k);
+        continue;
+      }
+      kept.set(k, sid);
+      load.set(sid, (load.get(sid) ?? 0) + 1);
+      companyLoad.set(ck, (companyLoad.get(ck) ?? 0) + 1);
     }
-    kept.set(k, sid);
-    load.set(sid, (load.get(sid) ?? 0) + 1);
-    companyLoad.set(ck, (companyLoad.get(ck) ?? 0) + 1);
   }
   const files = {
     ...worldFiles(world),

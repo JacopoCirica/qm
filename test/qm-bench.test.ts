@@ -90,3 +90,14 @@ test("cases round-trip through a dataset directory and the gold answer still pas
     assert.equal(c.prompt, task.prompt(task.generate(c.variant)));
   }
 });
+
+test("rebuilding a dataset directory drops files that no longer exist", () => {
+  const dir = mkdtempSync(join(tmpdir(), "qm-bench-rebuild-"));
+  const [first] = buildCases(allTasks().slice(0, 1), [1]);
+  const stale = { ...first!, files: { ...first!.files, "stale/left-over.txt": "old" } };
+  writeCases(dir, [stale]);
+  writeCases(dir, [first!]);
+  const [reloaded] = loadCases(dir);
+  assert.equal(reloaded!.files["stale/left-over.txt"], undefined);
+  assert.deepEqual(Object.keys(reloaded!.files).sort(), Object.keys(first!.files).sort());
+});

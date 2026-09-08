@@ -66,6 +66,30 @@ interface CaseRecord {
   outputs: Record<string, string>;
   messages: Array<{ role: string; content: string }>;
   entries: unknown[];
+  error: string | null;
+}
+
+function failedRecord(benchCase: BenchCase, startedAt: string, error: string): CaseRecord {
+  return {
+    task: benchCase.task,
+    family: benchCase.family,
+    difficulty: benchCase.difficulty,
+    case: benchCase.id,
+    variant: benchCase.variant,
+    model: benchModel,
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    turns: 0,
+    statuses: ["error"],
+    reward: 0,
+    partial: 0,
+    leaked: false,
+    checks: [],
+    outputs: {},
+    messages: [],
+    entries: [],
+    error,
+  };
 }
 
 async function runCase(env: Environment, benchCase: BenchCase): Promise<CaseRecord> {
@@ -103,6 +127,7 @@ async function runCase(env: Environment, benchCase: BenchCase): Promise<CaseReco
       outputs,
       messages,
       entries: await session.entries(),
+      error: null,
     };
   } finally {
     await session.close();
@@ -133,12 +158,22 @@ console.log(
   `qm-bench ${runId}: ${cases.length} cases from ${datasetDir ?? "generators"}, harness ${harness}, model ${modelId}${providerBaseUrl ? ` via ${providerBaseUrl}` : ""}`,
 );
 const records: CaseRecord[] = [];
-for (const benchCase of cases) {
-  try {
-    const record = await runCaseWithBackoff(env, benchCase);
+try {
+  for (const benchCase of cases) {
+    const startedAt = new Date().toISOString();
+    let record: CaseRecord;
+    try {
+      record = await runCaseWithBackoff(env, benchCase);
+    } catch (e) {
+      record = failedRecord(benchCase, startedAt, errMessage(e));
+    }
     records.push(record);
     mkdirSync(join(outDir, benchCase.task), { recursive: true });
     writeFileSync(join(outDir, benchCase.task, `${benchCase.id}.json`), JSON.stringify(record, null, 2));
+    if (record.error !== null) {
+      console.log(`  ${record.case}: ERROR ${record.error}`);
+      continue;
+    }
     const failing = record.checks
       .filter((c) => c.score < 1)
       .map((c) => `${c.id}=${c.score.toFixed(2)}`)
@@ -146,10 +181,11 @@ for (const benchCase of cases) {
     console.log(
       `  ${record.case}: ${record.reward === 1 ? "PASS" : "FAIL"} partial=${record.partial.toFixed(2)} turns=${record.turns} ${record.statuses.join("/")} ${failing}`,
     );
-  } catch (e) {
-    console.log(`  ${benchCase.id}: FAILED ${errMessage(e)}`);
   }
+} finally {
+  await env.close();
 }
+const errored = records.filter((r) => r.error !== null).length;
 
 interface TaskSummary {
   family: string;
@@ -195,10 +231,11 @@ const summary = {
     ["easy", "medium", "hard"].map((d) => [d, mean(records.filter((r) => r.difficulty === d).map((r) => r.reward))]),
   ),
   mean_partial: mean(records.map((r) => r.partial)),
+  execution_failures: errored,
   tasks: perTask,
 };
 writeFileSync(join(outDir, "summary.json"), JSON.stringify(summary, null, 2));
 console.log(
-  `pass rate ${summary.pass_rate} (mean partial ${summary.mean_partial}) over ${records.length} cases; wrote ${outDir}`,
+  `pass rate ${summary.pass_rate} (mean partial ${summary.mean_partial}) over ${records.length} cases, ${errored} execution failures; wrote ${outDir}`,
 );
-process.exit(0);
+process.exit(errored === 0 ? 0 : 2);

@@ -26,6 +26,16 @@ function mrrPhrase(r: Rng, newMrr: number | undefined, inEur: boolean, eurRate: 
   return `MRR ${moneyPhrase(r, newMrr)}`;
 }
 
+function freshDate(r: Rng, used: Set<string>): string {
+  for (;;) {
+    const date = addDays("2026-09-01", r.int(0, 25));
+    if (!used.has(date) && !used.has(addDays(date, 1))) {
+      used.add(date);
+      return date;
+    }
+  }
+}
+
 export function generate(seed: number): Fixture<UpdateKey> {
   const r = rng(seed * 7727 + 1);
   const names = companyNames(r, 200);
@@ -67,8 +77,9 @@ export function generate(seed: number): Fixture<UpdateKey> {
     const from = `${founder} <${founder.split(" ")[0]!.toLowerCase()}@${domains.get(row.slug)!}>`;
     const threads = r.chance(0.3) ? 2 : 1;
     let latest = "";
+    const usedDates = new Set<string>();
     for (let t = 0; t < threads; t++) {
-      const date = addDays("2026-09-01", r.int(0, 25));
+      const date = freshDate(r, usedDates);
       const newMrr = r.chance(0.8) ? Math.round(row.mrr_usd * (1 + r.int(-10, 40) / 100)) : undefined;
       const newHead = r.chance(0.7) ? Math.max(1, row.headcount + r.int(-2, 6)) : undefined;
       const inEur = newMrr !== undefined && r.chance(0.25);
@@ -108,7 +119,8 @@ export function generate(seed: number): Fixture<UpdateKey> {
       }
       files[`updates/${r.int(100000, 999999).toString(16)}.md`] = emailThread(mails);
       const effective = mails[mails.length - 1]!.date;
-      if (effective >= latest) {
+      usedDates.add(effective);
+      if (effective > latest) {
         latest = effective;
         const target = expected.find((c) => c.slug === row.slug)!;
         if (newMrr !== undefined)

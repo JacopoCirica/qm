@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { type BenchTask } from "./core/types.ts";
 
@@ -59,6 +59,7 @@ function readTree(root: string): Record<string, string> {
 }
 
 export function writeCases(dir: string, cases: BenchCase[]): void {
+  rmSync(dir, { recursive: true, force: true });
   for (const c of cases) {
     const root = join(dir, c.id);
     mkdirSync(root, { recursive: true });

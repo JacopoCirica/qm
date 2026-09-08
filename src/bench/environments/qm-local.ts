@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, type Config } from "../../config.ts";
@@ -24,6 +24,7 @@ interface CaseSession {
 
 export interface Environment {
   open(benchCase: BenchCase, runId: string): Promise<CaseSession>;
+  close(): Promise<void>;
 }
 
 export interface QmLocalOptions {
@@ -53,10 +54,11 @@ function removeDockerResources(actorId: string): void {
 }
 
 export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Environment> {
+  const dataDir = mkdtempSync(join(tmpdir(), "qm-bench-"));
   const config: Config = {
     ...loadConfig(),
     port: 0,
-    dataDir: mkdtempSync(join(tmpdir(), "qm-bench-")),
+    dataDir,
     sessionStore: "memory",
     runStore: "memory",
     harness: options.harness,
@@ -96,6 +98,9 @@ export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Envir
   });
 
   return {
+    async close() {
+      rmSync(dataDir, { recursive: true, force: true });
+    },
     async open(benchCase, runId) {
       const actorId = `qm-bench-${benchCase.id}-${runId}-${Date.now().toString(36)}`;
       const sessionIds: string[] = [];
