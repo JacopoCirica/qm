@@ -85,9 +85,12 @@ export function generate(seed: number): Fixture<RedlineKey> {
     const changed: string[] = [];
     const review: string[] = [];
     for (const c of r.sample(clauses, r.int(4, 7))) {
-      c.text = r.chance(0.3)
-        ? c.text.replace(/\b(Company|Investor)\b/, (m) => (m === "Company" ? "Investor" : "Company"))
-        : c.text.replace(/\$[\d,]+/, `$${(r.int(1, 30) * 500000).toLocaleString("en-US")}`);
+      const original = c.text;
+      do {
+        c.text = r.chance(0.3)
+          ? original.replace(/\b(Company|Investor)\b/, (m) => (m === "Company" ? "Investor" : "Company"))
+          : original.replace(/\$[\d,]+/, `$${(r.int(1, 30) * 500000).toLocaleString("en-US")}`);
+      } while (c.text === original);
       changed.push(c.id);
       if (needsReview(c.title)) review.push(c.id);
     }

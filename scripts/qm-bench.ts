@@ -103,6 +103,8 @@ async function runCase(env: Environment, benchCase: BenchCase): Promise<CaseReco
       const result = await session.turn(text);
       statuses.push(result.status);
       messages.push({ role: "assistant", content: result.reply });
+      if (result.status === "failed" || result.status === "error")
+        throw new Error(`turn ${result.status}: ${result.reply}`);
       if (result.status !== "ok") break;
     }
     const reader = await session.outputs();

@@ -99,7 +99,11 @@ export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Envir
 
   return {
     async close() {
-      rmSync(dataDir, { recursive: true, force: true });
+      try {
+        await built.runtime.stop();
+      } finally {
+        rmSync(dataDir, { recursive: true, force: true });
+      }
     },
     async open(benchCase, runId) {
       const actorId = `qm-bench-${benchCase.id}-${runId}-${Date.now().toString(36)}`;
