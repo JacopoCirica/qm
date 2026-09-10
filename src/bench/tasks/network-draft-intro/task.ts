@@ -5,7 +5,7 @@ import { verify } from "./verify.ts";
 export function task(): BenchTask {
   return defineTask<IntroKey>({
     id: "network-draft-intro",
-    difficulty: "medium",
+    difficulty: "hard",
     family: "network",
     origin: "observed",
     evidence:

@@ -5,7 +5,7 @@ import { verify } from "./verify.ts";
 export function task(): BenchTask {
   return defineTask<CommitmentsKey>({
     id: "office-hours-commitments",
-    difficulty: "medium",
+    difficulty: "easy",
     family: "office-hours",
     origin: "research",
     evidence:

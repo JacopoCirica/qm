@@ -5,7 +5,7 @@ import { verify } from "./verify.ts";
 export function task(): BenchTask {
   return defineTask<FactsKey>({
     id: "knowledge-capture-facts",
-    difficulty: "hard",
+    difficulty: "medium",
     family: "knowledge",
     origin: "research",
     evidence:

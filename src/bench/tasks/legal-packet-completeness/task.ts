@@ -5,7 +5,7 @@ import { verify } from "./verify.ts";
 export function task(): BenchTask {
   return defineTask<PacketKey>({
     id: "legal-packet-completeness",
-    difficulty: "easy",
+    difficulty: "medium",
     family: "legal",
     origin: "observed",
     evidence:

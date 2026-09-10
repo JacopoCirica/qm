@@ -5,7 +5,7 @@ import { verify } from "./verify.ts";
 export function task(): BenchTask {
   return defineTask<CrisisKey>({
     id: "founder-crisis-brief",
-    difficulty: "hard",
+    difficulty: "easy",
     family: "founder-support",
     origin: "research",
     evidence:

@@ -5,7 +5,7 @@ import { verify } from "./verify.ts";
 export function task(): BenchTask {
   return defineTask<RedlineKey>({
     id: "legal-clause-changes",
-    difficulty: "medium",
+    difficulty: "hard",
     family: "legal",
     origin: "observed",
     evidence:

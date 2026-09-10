@@ -5,7 +5,7 @@ import { verify } from "./verify.ts";
 export function task(): BenchTask {
   return defineTask<ConsolidateKey>({
     id: "finance-consolidate-records",
-    difficulty: "easy",
+    difficulty: "medium",
     family: "finance",
     origin: "research",
     evidence:

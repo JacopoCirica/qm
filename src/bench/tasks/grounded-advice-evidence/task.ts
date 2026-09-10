@@ -5,7 +5,7 @@ import { verify } from "./verify.ts";
 export function task(): BenchTask {
   return defineTask<AdviceKey>({
     id: "grounded-advice-evidence",
-    difficulty: "medium",
+    difficulty: "hard",
     family: "founder-support",
     origin: "research",
     evidence:

@@ -5,7 +5,7 @@ import { verify } from "./verify.ts";
 export function task(): BenchTask {
   return defineTask<UpdateKey>({
     id: "portfolio-update-records",
-    difficulty: "hard",
+    difficulty: "medium",
     family: "portfolio",
     origin: "observed",
     evidence:
