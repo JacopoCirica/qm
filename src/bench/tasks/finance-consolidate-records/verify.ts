@@ -1,4 +1,4 @@
-import { num, parseCsv } from "../../core/text.ts";
+import { f1, num, parseCsv } from "../../core/text.ts";
 import type { Check, Outputs } from "../../core/types.ts";
 import type { ConsolidateKey } from "./generate.ts";
 
@@ -17,6 +17,9 @@ export async function verify(outputs: Outputs, key: ConsolidateKey): Promise<Che
     refs.set(row.ref ?? "", (refs.get(row.ref ?? "") ?? 0) + 1);
     if (/^2026-08-\d{2}$/.test(row.date ?? "")) iso++;
   }
+  const rowKey = (x: { date?: unknown; amount?: unknown; vendor?: unknown; source?: unknown; ref?: unknown }): string =>
+    `${x.date}|${num(x.amount).toFixed(2)}|${String(x.vendor ?? "").toLowerCase()}|${String(x.source ?? "").toLowerCase()}|${x.ref}`;
+  const rowsMatch = f1(key.rows.map(rowKey), rows.map(rowKey));
   const sources = Object.keys(key.counts);
   const sumScore =
     sources.filter((s) => Math.abs((sums[s] ?? 0) - (key.totals[s] ?? 0)) < 0.011 * (key.counts[s] ?? 1)).length /
@@ -25,6 +28,7 @@ export async function verify(outputs: Outputs, key: ConsolidateKey): Promise<Che
   const dupesKept = key.duplicateRefs.filter((d) => (refs.get(d) ?? 0) > 1).length;
   return [
     { id: "columns", score: header === "date,amount,vendor,source,ref" ? 1 : 0 },
+    { id: "rows-match-key", score: rowsMatch },
     { id: "row-counts", score: countScore },
     { id: "totals-per-source", score: sumScore },
     { id: "iso-dates", score: rows.length === 0 ? 0 : iso / rows.length },

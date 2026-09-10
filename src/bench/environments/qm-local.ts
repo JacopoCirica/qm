@@ -112,8 +112,11 @@ export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Envir
       try {
         for (const [path, body] of Object.entries(benchCase.files))
           await built.sandbox.writeFile(seedHandle, path, body);
-      } finally {
         await built.sandbox.teardown(seedHandle);
+      } catch (error) {
+        await built.sandbox.teardown(seedHandle, { destroy: true });
+        removeDockerResources(actorId);
+        throw error;
       }
       let graderHandle: SandboxHandle | null = null;
       return {
