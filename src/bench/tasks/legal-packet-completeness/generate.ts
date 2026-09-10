@@ -46,6 +46,26 @@ export interface PacketKey {
   missing: Record<string, string[]>;
 }
 
+const CLOSING = "2026-09-30";
+
+function invalidCopy(r: Rng, doc: DocSpec): [string, string] {
+  const mode = r.int(0, 3);
+  if (mode === 0)
+    return [doc.canonical.replace(/\.(\w+)$/, `-${r.pick(["draft", "old", "v1"])}.$1`), `draft of ${doc.canonical}\n`];
+  if (mode === 1) return [r.pick(doc.accepted), ""];
+  if (mode === 2) return [r.pick(doc.accepted), `UNSIGNED ${doc.canonical}\n`];
+  return [`${r.pick(["old", "archive", "superseded"])}/${r.pick(doc.accepted)}`, `signed ${doc.canonical}\n`];
+}
+
+function validBody(r: Rng, doc: DocSpec): string {
+  if (doc.canonical !== "bank-letter.pdf") return `signed ${doc.canonical}\n`;
+  return `signed bank-letter.pdf\nDated: ${addDays(CLOSING, -r.int(1, 89))}\n`;
+}
+
+function staleBankLetter(r: Rng): string {
+  return `signed bank-letter.pdf\nDated: ${addDays(CLOSING, -r.int(91, 400))}\n`;
+}
+
 function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }
@@ -76,7 +96,8 @@ function roundChanges(r: Rng, companies: string[], rounds: Map<string, string>):
 }
 
 function fileName(r: Rng, name: string): string {
-  return r.chance(0.3) ? name.toUpperCase() : name;
+  const i = name.lastIndexOf("/") + 1;
+  return r.chance(0.3) ? `${name.slice(0, i)}${name.slice(i).toUpperCase()}` : name;
 }
 
 export function generate(seed: number): Fixture<PacketKey> {
@@ -90,7 +111,8 @@ export function generate(seed: number): Fixture<PacketKey> {
         "# Investment packet checklist",
         "",
         "Required documents depend on the round type in legal/companies.csv. A document counts if a file with one of its accepted names exists anywhere inside the packet directory, including subfolders, and is not empty.",
-        "A file with draft, old, or v1 anywhere in its name never counts. File names match case-insensitively. Extra files are fine.",
+        "A file with draft, old, or v1 anywhere in its name never counts, and neither does anything inside a folder named old, archive or superseded. A file whose contents say UNSIGNED never counts. File names match case-insensitively. Extra files are fine.",
+        `The bank letter counts only if the date on it is within 90 days of the closing date, ${CLOSING}.`,
         "",
         "| document | accepted file names | required for |",
         "|---|---|---|",
@@ -109,14 +131,12 @@ export function generate(seed: number): Fixture<PacketKey> {
     missing[company] = required.filter((d) => gone.has(d)).map((d) => d.canonical);
     for (const doc of required) {
       const sub = r.chance(0.3) ? `${r.pick(["signed", "final", "docs"])}/` : "";
+      const at = (name: string): string => `legal/packets/${company}/${sub}${fileName(r, name)}`;
       if (gone.has(doc)) {
-        const mode = r.int(0, 2);
-        if (mode === 0)
-          files[
-            `legal/packets/${company}/${sub}${doc.canonical.replace(/\.(\w+)$/, `-${r.pick(["draft", "old", "v1"])}.$1`)}`
-          ] = `draft of ${doc.canonical}\n`;
-        if (mode === 1) files[`legal/packets/${company}/${sub}${fileName(r, r.pick(doc.accepted))}`] = "";
-      } else files[`legal/packets/${company}/${sub}${fileName(r, r.pick(doc.accepted))}`] = `signed ${doc.canonical}\n`;
+        const stale = doc.canonical === "bank-letter.pdf" && r.chance(0.5);
+        const [name, body] = stale ? [r.pick(doc.accepted), staleBankLetter(r)] : invalidCopy(r, doc);
+        if (r.chance(0.8)) files[at(name)] = body;
+      } else files[at(r.pick(doc.accepted))] = validBody(r, doc);
     }
     const extra = DOCS.filter((d) => !d.rounds.includes(rounds.get(company)!));
     if (extra.length > 0 && r.chance(0.3))
