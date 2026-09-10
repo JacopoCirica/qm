@@ -14,7 +14,7 @@ export function task(): BenchTask {
     outputs: ["output/triage.json"],
     generate,
     prompt: () =>
-      'Work out the partners\' triage rules from history/decisions.csv (read history/README.md), then apply them to portfolio/companies.csv. Write output/triage.json as {"rules": {"low_runway_below_months": n, "stale_after_days": n}, "flagged": [{"slug", "reasons": [...]}, ...]} using the reason codes from the history, ordered by the convention in the README. Companies that trip nothing must not appear. Write a script.',
+      'Work out the partners\' triage rules from history/decisions.csv (read history/README.md), then apply them to portfolio/companies.csv. Write output/triage.json as {"rules": {"low_runway_below_months": n, "stale_after_days": n, "negative_growth_below_pct": n}, "flagged": [{"slug", "reasons": [...]}, ...]} using the reason codes from the history, ordered by the convention in the README. Companies that trip nothing must not appear. Write a script.',
     verify,
   });
 }

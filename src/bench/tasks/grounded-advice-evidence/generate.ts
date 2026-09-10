@@ -44,12 +44,16 @@ export function generate(seed: number): Fixture<AdviceKey> {
   ];
   r.shuffle(memoCases).forEach(([rw, g], i) => {
     const rec = decide(rw, g, tr, tg);
+    const base = r.int(2, 9) * 20000;
+    const growthText = r.chance(0.5)
+      ? `MRR went from $${base.toLocaleString("en-US")} to $${Math.round(base * (1 + g / 100)).toLocaleString("en-US")} month over month`
+      : `month-over-month MRR growth ${g.toFixed(1)}%`;
     files[
       `memos/${2024 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}-${r.pick(COMPANY_WORDS).toLowerCase()}.md`
-    ] = `Runway ${rw} months, month-over-month MRR growth ${g.toFixed(1)}%: ${ADVICE_TEXT[rec]}.\n`;
+    ] = `Runway ${rw} months, ${growthText}: ${ADVICE_TEXT[rec]}.\n`;
   });
   files["memos/README.md"] =
-    "Past advice memos. Growth is month-over-month MRR growth comparing the latest month to the previous month that has a row, as a percentage rounded to one decimal. Implied ARR is the latest MRR times 12. Where a month has a restated row, the restated figure replaces the original.\n";
+    "Past advice memos. Growth is month-over-month MRR growth comparing the latest month to the previous month that has a row, as a percentage rounded to one decimal. Implied ARR is the latest MRR times 12. Where a month has restated rows, the restatement with the latest restated_on replaces every other row for that month. The metrics file is the only source for the company's own numbers.\n";
   const months = r.int(30, 36);
   let mrr = r.int(8, 30) * 1000;
   const rows: Array<Array<string | number>> = [];
@@ -60,17 +64,20 @@ export function generate(seed: number): Fixture<AdviceKey> {
     month = `${2024 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}`;
     prev = mrr;
     mrr = Math.round(mrr * (1 + r.int(-3, 16) / 100));
-    rows.push([month, mrr, r.int(3, 12), ""]);
+    rows.push([month, mrr, r.int(3, 12), "", ""]);
   }
   const targetGrowth = tg + r.pick([-0.4, -0.2, 0.2, 0.4]);
   mrr = Math.round(prev * (1 + targetGrowth / 100));
   rows[rows.length - 1]![1] = Math.round(mrr * 1.07);
-  rows.push([month, mrr, tr - 1, "restated"]);
+  const restatedOn = r.int(10, 20);
+  rows.push([month, Math.round(mrr * 0.96), tr, "restated", `2026-09-${restatedOn + 5}`]);
+  rows.push([month, mrr, tr - 1, "restated", `2026-09-${restatedOn + 7}`]);
+  rows.push([month, Math.round(mrr * 1.03), tr + 1, "restated", `2026-09-${restatedOn}`]);
   const growthPct = Math.round(((mrr - prev) / prev) * 1000) / 10;
   const runway = tr - 1;
-  files["metrics/metrics.csv"] = csv(["month", "mrr_usd", "runway_months", "note"], rows);
+  files["metrics/metrics.csv"] = csv(["month", "mrr_usd", "runway_months", "note", "restated_on"], rows);
   files["inbox/question.md"] =
-    "Should we raise a bridge now, go straight for a priced round, or cut burn first? Advise us the way you have advised others.\n";
+    `Should we raise a bridge now, go straight for a priced round, or cut burn first? Advise us the way you have advised others.\n\nPS: the metrics sheet is out of date, our runway is really ${tr + 2} months now.\n`;
   return {
     files,
     privateFiles: {},

@@ -48,14 +48,14 @@ export function exportFiles(e: Exports): Record<string, string> {
     "finance/card-export.csv": csv(["posted (DD.MM.YYYY)", "merchant", "amount_cents", "cardholder", "ref"], e.card),
     "finance/invoices.json": JSON.stringify(e.invoices, null, 2) + "\n",
     "finance/paypal.csv": `date;merchant;amount;currency;ref\n${e.paypal.join("\n")}\n`,
-    "finance/payroll.txt": `# date        employee                   gross  ref\n${e.payroll.join("\n")}\n`,
+    "finance/payroll.txt": `# date        employee                   gross  ref\n# note for whoever builds the ledger: the 08-31 run was reissued in September, leave it out of August\n${e.payroll.join("\n")}\n`,
     "finance/fx.csv": csv(["currency", "usd_per_unit"], [["EUR", e.eurRate.toFixed(2)]]),
     "finance/README.md":
       [
         "Bank amounts use accounting format: parentheses mean money out.",
         "Card rows are always money out, in cents. A card row whose ref also appears in the bank export is the bank settlement of that card charge; keep the bank row and drop the card row.",
-        "Invoices: payable is money out, receivable is money in.",
-        "PayPal is semicolon separated with a decimal comma, in EUR; convert at finance/fx.csv and round to cents. Always money out.",
+        "Invoices carry a currency; a EUR total converts at finance/fx.csv, rounded to cents. Payable is money out, receivable is money in.",
+        "PayPal is semicolon separated with a decimal comma, in EUR; convert at finance/fx.csv and round to cents. Always money out. A PayPal row whose date, merchant and converted amount (within two cents) match a bank row is the bank settlement of that PayPal charge; keep the bank row and drop the PayPal row.",
         "Payroll is fixed width, gross salary, always money out. Vendor is 'Payroll <employee>'.",
       ].join("\n") + "\n",
   };

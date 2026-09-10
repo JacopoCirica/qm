@@ -11,7 +11,7 @@ export function gold(f: Fixture<PeersKey>): Record<string, string> {
         return {
           name: `X ${last[0]!.toUpperCase()}${last.slice(1)}`,
           company,
-          why: `Same sector, has been through ${f.key.topic}`,
+          why: `Same sector; their profile lists "${f.key.phraseOf[k]}"`,
         };
       }),
     ),

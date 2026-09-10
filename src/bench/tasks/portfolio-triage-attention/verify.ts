@@ -16,6 +16,7 @@ export async function verify(outputs: Outputs, key: TriageKey): Promise<Check[]>
   return [
     { id: "inferred-runway-rule", score: close(num(rules.low_runway_below_months), key.runwayBelow, 0) ? 1 : 0 },
     { id: "inferred-stale-rule", score: close(num(rules.stale_after_days), key.staleAfter, 0) ? 1 : 0 },
+    { id: "inferred-growth-rule", score: close(num(rules.negative_growth_below_pct), key.growthBelow, 0) ? 1 : 0 },
     {
       id: "flagged-set",
       score: f1(

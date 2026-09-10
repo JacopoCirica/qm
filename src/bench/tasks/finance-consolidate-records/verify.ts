@@ -34,6 +34,10 @@ export async function verify(outputs: Outputs, key: ConsolidateKey): Promise<Che
       detail: `${dupesKept} kept`,
     },
     {
+      id: "paypal-settlements-deduped",
+      score: rows.length > 0 && key.paypalDuplicateRefs.every((d) => !refs.has(d)) && (counts.paypal ?? 0) > 0 ? 1 : 0,
+    },
+    {
       id: "sign-convention",
       score:
         rows.length > 0 &&

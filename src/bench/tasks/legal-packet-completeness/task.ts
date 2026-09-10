@@ -14,7 +14,7 @@ export function task(): BenchTask {
     outputs: ["output/completeness.json"],
     generate,
     prompt: () =>
-      'Check every packet under legal/packets/ against legal/checklist.md, using legal/companies.csv for each packet\'s round type. Write output/completeness.json as a JSON object keyed by packet directory name, each value {"complete": true|false, "missing": [canonical document names from the checklist that are absent]}. Write a script.',
+      'Check every packet under legal/packets/ against legal/checklist.md, using legal/companies.csv for each packet\'s round type as exported and legal/round-changes.md for the round types that changed since. Write output/completeness.json as a JSON object keyed by packet directory name, each value {"complete": true|false, "missing": [canonical document names from the checklist that are absent]}. Write a script.',
     verify,
   });
 }

@@ -14,7 +14,7 @@ export function task(): BenchTask {
     outputs: ["output/handbook.md"],
     generate,
     prompt: () =>
-      "knowledge/handbook.md has fallen behind updates/announcements.md. Write the corrected handbook to output/handbook.md as of the date the announcements file states: apply every change that is already effective, in order (a later announcement can undo an earlier one), resolve section names through knowledge/aliases.md, keep every other section byte-for-byte identical, and keep the section order. Write a script.",
+      "knowledge/handbook.md has fallen behind the announcements in updates/. Write the corrected handbook to output/handbook.md as of the date the announcement files state: apply every change that is already effective, in stamp order across all the files (a later announcement can undo an earlier one), resolve section names through knowledge/aliases.md, keep every other section byte-for-byte identical, and keep the section order. Write a script.",
     verify,
   });
 }

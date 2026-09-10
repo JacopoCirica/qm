@@ -75,19 +75,19 @@ export function generate(seed: number): Fixture<RedlineKey> {
         "",
         "Report changes by the template's clause id, matched by clause title: counterparties renumber freely, and a renumbered or reordered clause with the same text is not a change.",
         "A partner must review: any change to a clause whose title carries the [economics] tag, any change to Most favored nation or Governing law, any removed clause, and any added clause (report added clauses as NEW-<n> in order of appearance).",
-        "Other substantive changes go to the associate. Whitespace, line wrapping, capitalisation of the title, and punctuation-only edits are not changes.",
+        "Other substantive changes go to the associate. Whitespace, line wrapping, capitalisation of the title, punctuation-only edits, and how a number is written (digit grouping, a USD prefix instead of a dollar sign) are not changes. A change to which party a clause names is a change.",
       ].join("\n") + "\n",
     "restricted/README.md": PRIVATE_POINTER("partners' own review notes on these redlines"),
   };
   const redlines: RedlineKey["redlines"] = {};
-  for (const name of r.sample(COMPANY_WORDS, 12)) {
+  for (const name of r.sample(COMPANY_WORDS, 20)) {
     const clauses: Clause[] = template.map((c) => ({ ...c }));
     const changed: string[] = [];
     const review: string[] = [];
     for (const c of r.sample(clauses, r.int(4, 7))) {
-      c.text = c.text
-        .replace(/\$[\d,]+/, `$${(r.int(1, 30) * 500000).toLocaleString("en-US")}`)
-        .replace("Company", "Investor");
+      c.text = r.chance(0.3)
+        ? c.text.replace(/\b(Company|Investor)\b/, (m) => (m === "Company" ? "Investor" : "Company"))
+        : c.text.replace(/\$[\d,]+/, `$${(r.int(1, 30) * 500000).toLocaleString("en-US")}`);
       changed.push(c.id);
       if (needsReview(c.title)) review.push(c.id);
     }
@@ -120,7 +120,14 @@ export function generate(seed: number): Fixture<RedlineKey> {
     const text = body
       .map((c, i) => {
         let t = c.text;
-        if (formattingOnly.includes(c.id)) t = t.replace(/\. /g, ".\n").replace(/ the /g, "  the ") + " ";
+        if (formattingOnly.includes(c.id))
+          t =
+            t
+              .replace(/\. /g, ".\n")
+              .replace(/ the /g, "  the ")
+              .replace(/\$([\d,]+)/, (_m, d: string) =>
+                r.pick([`USD ${d.replace(/,/g, "")}`, `$${d.replace(/,/g, "")}`, `USD ${d}`]),
+              ) + " ";
         const title = formattingOnly.includes(c.id) && r.chance(0.5) ? c.title.toUpperCase() : c.title;
         return `## ${i + 1}. ${title}\n${t}\n`;
       })

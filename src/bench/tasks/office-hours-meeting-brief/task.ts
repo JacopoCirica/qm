@@ -15,7 +15,7 @@ export function task(): BenchTask {
     generate,
     prompt: (f) =>
       `Prepare the office hours brief for ${f.key.date}. The published schedule is calendar/schedule.json; every change since is in calendar/changes-chat.md in order, and a later message can undo an earlier one. Write output/brief.json as {"slots": [...]}, each {"time", "room", "company", "founder", "tracking"}. ` +
-      "founder is whoever the company's latest email in updates/ says will attend; tracking is the Tracking id in that latest email (quoted older emails carry stale ids). Update files are named at random; match a company by the sender's email domain using directory/companies.csv. Order by time then room. Leave cancelled meetings out.",
+      "founder is whoever the company's latest email across all of updates/ says will attend (a company can have more than one thread; only the newest email counts, and an older thread's attendance note does not carry over); tracking is the Tracking id in that latest email (quoted older emails carry stale ids). Update files are named at random; match a company by the sender's email domain using directory/companies.csv. Order by time then room. Leave cancelled meetings out.",
     verify,
   });
 }

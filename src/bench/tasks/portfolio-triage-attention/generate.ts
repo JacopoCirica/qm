@@ -12,6 +12,13 @@ export interface TriageKey {
   flagged: TriageEntry[];
   runwayBelow: number;
   staleAfter: number;
+  growthBelow: number;
+}
+
+interface Rules {
+  runwayBelow: number;
+  staleAfter: number;
+  growthBelow: number;
 }
 
 interface Metrics {
@@ -23,11 +30,11 @@ interface Metrics {
   open_incident: string;
 }
 
-function reasonsFor(c: Metrics, runwayBelow: number, staleAfter: number): string[] {
+function reasonsFor(c: Metrics, rules: Rules): string[] {
   const reasons: string[] = [];
-  if (c.runway_months < runwayBelow) reasons.push("low-runway");
-  if (c.days_since_update > staleAfter) reasons.push("stale-update");
-  if (c.mrr_growth_pct < 0) reasons.push("negative-growth");
+  if (c.runway_months < rules.runwayBelow) reasons.push("low-runway");
+  if (c.days_since_update > rules.staleAfter) reasons.push("stale-update");
+  if (c.mrr_growth_pct < rules.growthBelow) reasons.push("negative-growth");
   if (c.open_incident === "yes") reasons.push("open-incident");
   return reasons;
 }
@@ -44,7 +51,7 @@ function metrics(r: Rng, name: string, over: Partial<Metrics> = {}): Metrics {
   };
 }
 
-function boundaryCases(r: Rng, names: string[], runwayBelow: number, staleAfter: number): Metrics[] {
+function boundaryCases(r: Rng, names: string[], { runwayBelow, staleAfter, growthBelow }: Rules): Metrics[] {
   return [
     metrics(r, names[0]!, {
       runway_months: runwayBelow - 1,
@@ -60,34 +67,66 @@ function boundaryCases(r: Rng, names: string[], runwayBelow: number, staleAfter:
       open_incident: "no",
     }),
     metrics(r, names[3]!, { runway_months: 15, days_since_update: staleAfter, mrr_growth_pct: 5, open_incident: "no" }),
-    metrics(r, names[4]!, { runway_months: 15, days_since_update: 5, mrr_growth_pct: 0, open_incident: "no" }),
-    metrics(r, names[5]!, { runway_months: 15, days_since_update: 5, mrr_growth_pct: -1, open_incident: "no" }),
+    metrics(r, names[4]!, {
+      runway_months: 15,
+      days_since_update: 5,
+      mrr_growth_pct: growthBelow,
+      open_incident: "no",
+    }),
+    metrics(r, names[5]!, {
+      runway_months: 15,
+      days_since_update: 5,
+      mrr_growth_pct: growthBelow - 1,
+      open_incident: "no",
+    }),
   ];
+}
+
+function currentRows(r: Rng, current: Metrics[]): Array<Array<string | number>> {
+  const row = (c: Metrics, asOf: string): Array<string | number> => [
+    c.slug,
+    c.name,
+    c.runway_months,
+    c.days_since_update,
+    c.mrr_growth_pct,
+    c.open_incident,
+    asOf,
+  ];
+  const rows: Array<Array<string | number>> = [];
+  for (const c of current) {
+    const asOf = `2026-09-${String(r.int(10, 20)).padStart(2, "0")}`;
+    if (r.chance(0.15)) rows.push(row(metrics(r, c.name), `2026-09-${String(r.int(1, 9)).padStart(2, "0")}`));
+    rows.push(row(c, asOf));
+  }
+  return r.shuffle(rows);
 }
 
 export function generate(seed: number): Fixture<TriageKey> {
   const r = rng(seed * 6007 + 2);
-  const runwayBelow = r.int(4, 8);
-  const staleAfter = r.pick([30, 45, 60]);
-  const names = companyNames(r, 240);
-  const historyNames = names.slice(0, 90);
-  const boundary = boundaryCases(r, historyNames, runwayBelow, staleAfter);
+  const rules: Rules = {
+    runwayBelow: r.int(4, 8),
+    staleAfter: r.pick([30, 45, 60]),
+    growthBelow: r.pick([-5, -3, -1, 0]),
+  };
+  const names = companyNames(r, 300);
+  const historyNames = names.slice(0, 120);
+  const boundary = boundaryCases(r, historyNames, rules);
   const history = [...boundary, ...historyNames.slice(6).map((n) => metrics(r, n))];
-  const current = names.slice(90).map((n) => metrics(r, n));
+  const current = names.slice(120).map((n) => metrics(r, n));
   const flagged: TriageEntry[] = current
-    .map((c) => ({ slug: c.slug, reasons: reasonsFor(c, runwayBelow, staleAfter), runway: c.runway_months }))
+    .map((c) => ({ slug: c.slug, reasons: reasonsFor(c, rules), runway: c.runway_months }))
     .filter((c) => c.reasons.length > 0)
     .sort((a, b) => a.runway - b.runway || a.slug.localeCompare(b.slug))
     .map(({ slug, reasons }) => ({ slug, reasons }));
   const files = {
     "portfolio/companies.csv": csv(
-      ["slug", "name", "runway_months", "days_since_update", "mrr_growth_pct", "open_incident"],
-      current.map((c) => [c.slug, c.name, c.runway_months, c.days_since_update, c.mrr_growth_pct, c.open_incident]),
+      ["slug", "name", "runway_months", "days_since_update", "mrr_growth_pct", "open_incident", "as_of"],
+      currentRows(r, current),
     ),
     "history/decisions.csv": csv(
       ["slug", "runway_months", "days_since_update", "mrr_growth_pct", "open_incident", "flagged", "reasons"],
       r.shuffle(history).map((c) => {
-        const reasons = reasonsFor(c, runwayBelow, staleAfter);
+        const reasons = reasonsFor(c, rules);
         return [
           c.slug,
           c.runway_months,
@@ -100,7 +139,7 @@ export function generate(seed: number): Fixture<TriageKey> {
       }),
     ),
     "history/README.md":
-      "Every triage decision the partners made last quarter, with the reason codes they used. The rules were never written down; the decisions are the rules. Ordering convention for the list: runway ascending, then slug.\n\nWhen you write the rules down: low_runway_below_months is n when a runway strictly under n months gets low-runway, and stale_after_days is n when strictly more than n days since the last update gets stale-update.\n",
+      "Every triage decision the partners made last quarter, with the reason codes they used. The rules were never written down; the decisions are the rules. Ordering convention for the list: runway ascending, then slug.\n\nWhen you write the rules down: low_runway_below_months is n when a runway strictly under n months gets low-runway, stale_after_days is n when strictly more than n days since the last update gets stale-update, and negative_growth_below_pct is n when growth strictly under n percent gets negative-growth.\n\nportfolio/companies.csv is an append-only export: a slug can appear more than once, and only its row with the latest as_of counts.\n",
   };
-  return { files, privateFiles: {}, key: { flagged, runwayBelow, staleAfter } };
+  return { files, privateFiles: {}, key: { flagged, ...rules } };
 }

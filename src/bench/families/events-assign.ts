@@ -159,7 +159,7 @@ export function constraintChecks(world: World, assign: Assignment, rows: number,
     { id: "company-cap", score: assign.size > 0 && overCompany === 0 ? 1 : 0, detail: `${overCompany} over` },
     {
       id: "top2-vs-baseline",
-      score: baselineTop2 === 0 || top2 >= 0.98 * baselineTop2 ? 1 : top2 / baselineTop2,
+      score: baselineTop2 === 0 || top2 >= 0.995 * baselineTop2 ? 1 : top2 / baselineTop2,
       detail: `${top2.toFixed(3)} vs ${baselineTop2.toFixed(3)}`,
     },
   ];

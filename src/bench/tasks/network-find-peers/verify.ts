@@ -25,6 +25,17 @@ export async function verify(outputs: Outputs, key: PeersKey): Promise<Check[]> 
       id: "no-duplicates",
       score: keys.length > 0 && new Set(keys).size === keys.length && keys.length <= 5 ? 1 : 0,
     },
-    { id: "why-given", score: rows.length > 0 && rows.every((r) => str(r.why).length > 10) ? 1 : 0 },
+    {
+      id: "why-names-their-expertise",
+      score:
+        rows.length > 0 &&
+        rows.every((r, i) =>
+          str(r.why)
+            .toLowerCase()
+            .includes((key.phraseOf[keys[i]!] ?? "\u0000").toLowerCase()),
+        )
+          ? 1
+          : 0,
+    },
   ];
 }

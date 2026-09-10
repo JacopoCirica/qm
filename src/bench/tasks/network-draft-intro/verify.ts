@@ -14,10 +14,11 @@ export async function verify(outputs: Outputs, key: IntroKey): Promise<Check[]> 
       const body = str(e.body);
       return body.length > 0 && fn(t, body, `${str(e.subject)} ${body}`);
     }).length / written.length;
-  const blockedEntry = entry(key.targets.find((t) => t.blocked)!);
+  const blocked = key.targets.filter((t) => t.blocked);
+  const skipped = blocked.filter((t) => entry(t)?.skipped === true && !str(entry(t)!.body)).length;
   return [
     { id: "one-entry-per-person", score: rows.length === key.targets.length ? 1 : 0 },
-    { id: "blocked-person-skipped", score: blockedEntry?.skipped === true && !str(blockedEntry.body) ? 1 : 0 },
+    { id: "blocked-people-skipped", score: skipped === blocked.length ? 1 : 0 },
     {
       id: "asks-opt-in",
       score: score((_t, body) =>
@@ -37,6 +38,7 @@ export async function verify(outputs: Outputs, key: IntroKey): Promise<Check[]> 
       score: score((_t, _b, all) => includesAny(all, [key.requester]) && includesAny(all, [key.requesterCompany])),
     },
     { id: "mentions-milestone", score: score((t, body) => includesAny(body, [t.milestoneCue])) },
+    { id: "skips-the-stale-milestone", score: score((t, body) => !includesAny(body, [t.staleCue])) },
     { id: "states-the-ask", score: score((_t, body) => includesAny(body, key.topicCues)) },
     { id: "per-person-word-limit", score: score((t, body) => words(body) <= t.wordLimit) },
     {
