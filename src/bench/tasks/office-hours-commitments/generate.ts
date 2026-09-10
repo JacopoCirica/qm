@@ -103,7 +103,7 @@ export function generate(seed: number): Fixture<CommitmentsKey> {
     "That is fair.",
   ];
   const chatter = [
-    [`${partner}: How did the launch land?`, `${founder}: Noisy. I will have a real read in two weeks.`],
+    [`${partner}: How did the launch land?`, `${founder}: Noisy. Too early to say.`],
     [`${partner}: One idea, a referral program. No commitment, just think about it.`],
     [
       `${founder}: Could you intro me to someone at Harbor Logistics?`,
