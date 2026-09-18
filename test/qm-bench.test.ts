@@ -13,8 +13,8 @@ import { join } from "node:path";
  * cases survive a round trip through a dataset directory.
  */
 const tasks = allTasks();
-/** Three of the six variants; all 96 run by hand through scripts/gold checks. */
-const seeds = [1, 2, 3];
+/** Both cases of every task. */
+const seeds = [1, 2];
 
 test("taxonomy has two tasks in each of the eight families", () => {
   const byFamily = new Map<string, number>();

@@ -33,7 +33,7 @@ const taskFilter = (process.env.QM_BENCH_TASKS ?? "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
-const variants = (process.env.QM_BENCH_CASES ?? "1,2,3,4,5,6")
+const variants = (process.env.QM_BENCH_CASES ?? "1,2")
   .split(",")
   .map((s) => Number(s.trim()))
   .filter((n) => Number.isInteger(n) && n > 0);

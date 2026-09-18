@@ -6,7 +6,7 @@ import { allTasks } from "../src/bench/registry.ts";
  * files instead of calling the generators. See src/bench/dataset.ts for the layout.
  */
 const outDir = process.env.QM_BENCH_DATASET ?? "bench/cases";
-const variants = (process.env.QM_BENCH_CASES ?? "1,2,3,4,5,6")
+const variants = (process.env.QM_BENCH_CASES ?? "1,2")
   .split(",")
   .map((s) => Number(s.trim()))
   .filter((n) => Number.isInteger(n) && n > 0);
