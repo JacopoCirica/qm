@@ -2,11 +2,7 @@ import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type PeersKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
-/**
- * Find up to five founders in the community directory who match a peer-intro request, respecting do-
- * not-contact,
- * later record updates, and the requester's city.
- */
+/** Find up to five peers for an intro request, honouring do-not-contact, updates and city. */
 export function task(): BenchTask {
   return defineTask<PeersKey>({
     id: "network-find-peers",
@@ -25,11 +21,7 @@ export function task(): BenchTask {
   });
 }
 
-/**
- * Reference answer from the key: up to five eligible people, same-city first, each with a why that
- * quotes their
- * matched expertise phrase. Names are placeholders because the verifier matches on surname plus company.
- */
+/** Reference answer: up to five eligible people, same-city first, why quoting their phrase. */
 export function gold(f: Fixture<PeersKey>): Record<string, string> {
   const preferred = new Set(f.key.preferred);
   const ranked = [...f.key.eligible].sort((a, b) => Number(preferred.has(b)) - Number(preferred.has(a))).slice(0, 5);

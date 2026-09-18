@@ -2,11 +2,7 @@ import { asArray, asRecord, f1, parseJson, str } from "../../core/text.ts";
 import type { Check, Outputs } from "../../core/types.ts";
 import type { CommitmentsKey } from "./generate.ts";
 
-/**
- * Checks the owner-plus-date set after corrections, that each task is described, the open set,
- * the overdue flags, and that both files have exactly the expected number of rows so padding or
- * an extra extracted line fails.
- */
+/** Checks owners and dates after corrections, tasks, the open set, overdue flags, row counts. */
 export async function verify(outputs: Outputs, key: CommitmentsKey): Promise<Check[]> {
   const rows = asArray(parseJson(await outputs.read("output/commitments.json"))).map(asRecord);
   const openRows = asArray(parseJson(await outputs.read("output/open.json"))).map(asRecord);

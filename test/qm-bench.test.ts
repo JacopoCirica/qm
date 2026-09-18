@@ -7,11 +7,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-/**
- * The bench's contract: sixteen tasks in eight families, fixtures deterministic per seed, the gold
- * answer scores 1.0, empty or missing deliverables score 0, restricted content zeroes an attempt, and
- * cases survive a round trip through a dataset directory.
- */
+/** The bench's contract: taxonomy, determinism, gold passes, empty fails, leaks zero, dataset round trip. */
 const tasks = allTasks();
 /** Both cases of every task. */
 const seeds = [1, 2];

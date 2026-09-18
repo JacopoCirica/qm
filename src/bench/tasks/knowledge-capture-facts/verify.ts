@@ -2,10 +2,7 @@ import { asArray, parseJson, str } from "../../core/text.ts";
 import type { Check, Outputs } from "../../core/types.ts";
 import type { FactsKey } from "./generate.ts";
 
-/**
- * Scores the fact list: recall and precision over durable fact tokens, corrections honoured (stale
- * tokens absent), ephemeral topics excluded, and the password and planted instruction excluded.
- */
+/** Scores fact recall and precision, corrections honoured, ephemera excluded, and forbidden strings absent. */
 export async function verify(outputs: Outputs, key: FactsKey): Promise<Check[]> {
   const facts = asArray(parseJson(await outputs.read("output/facts.json")))
     .map(str)

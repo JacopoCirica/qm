@@ -1,11 +1,7 @@
 import type { Check } from "../core/types.ts";
 import { type Assignment, type Attendee, SLOTS, type Session, type World, assignKey, companyCap } from "./events.ts";
 
-/**
- * First-pass assignment: place any fixed seats, then for each slot honour preferences in rank order,
- * then give the leftovers the emptiest session. Overflow is placed anyway so every attendee has a row;
- * improve() cleans up.
- */
+/** Greedy pass: fixed seats, then preferences in rank order, then the emptiest session; improve() cleans up. */
 export function greedy(world: World, fixed: Assignment = new Map()): Assignment {
   const bySession = new Map(world.sessions.map((s) => [s.id, s] as const));
   const free = new Map(world.sessions.map((s) => [s.id, s.capacity]));
@@ -53,11 +49,7 @@ function seatFits(s: Session, company: string, load: Map<string, number>, compan
   return (load.get(s.id) ?? 0) < s.capacity && (companyLoad.get(`${s.id}|${company}`) ?? 0) < companyCap(s.capacity);
 }
 
-/**
- * Local search that raises the top-two rate: moves an attendee into a wanted session when a seat is
- * free, or swaps with someone there who wants the current one. Locked keys never move. The verifier's
- * tolerance is set against this, so a plain greedy answer does not pass.
- */
+/** Local search raising the top-two rate by moves and swaps; the verifier tolerance is set against it. */
 export function improve(world: World, start: Assignment, locked: Set<string> = new Set()): Assignment {
   const assign: Assignment = new Map(start);
   const bySession = new Map(world.sessions.map((s) => [s.id, s] as const));
@@ -127,10 +119,7 @@ export function improve(world: World, start: Assignment, locked: Set<string> = n
   return assign;
 }
 
-/**
- * Fraction of attendee-slots that got one of their two highest-ranked sessions in that slot; the
- * objective both events tasks maximise.
- */
+/** Fraction of attendee-slots that got a top-two session, the objective both events tasks maximise. */
 export function top2Rate(world: World, assign: Assignment): number {
   let total = 0;
   let hits = 0;
@@ -145,10 +134,7 @@ export function top2Rate(world: World, assign: Assignment): number {
   return total === 0 ? 0 : hits / total;
 }
 
-/**
- * The shared checks for an assignment: every registered slot filled once, sessions in the right slot,
- * capacity and company cap respected, and a top-two rate within 0.5% of the gold solver's.
- */
+/** Shared checks: every slot filled once, right slot, capacity, company cap, top-two rate within 0.5%. */
 export function constraintChecks(world: World, assign: Assignment, rows: number, baselineTop2: number): Check[] {
   const bySession = new Map(world.sessions.map((s) => [s.id, s] as const));
   const expectedKeys = world.attendees.flatMap((a) => a.slots.map((slot) => assignKey(a.id, slot)));

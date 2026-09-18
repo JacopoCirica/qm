@@ -2,12 +2,7 @@ import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type BriefKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
-/**
- * Meeting brief: the agent rebuilds the day's office-hours schedule from the published calendar,
- * an ops chat of changes and reversals, and each company's latest update email.
- * Tests applying changes in order, matching senders by domain, and taking only the newest email
- * across several threads while ignoring quoted stale ids.
- */
+/** Meeting brief: rebuild the day's schedule from the calendar, the ops chat and newest emails. */
 export function task(): BenchTask {
   return defineTask<BriefKey>({
     id: "office-hours-meeting-brief",

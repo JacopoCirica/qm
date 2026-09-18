@@ -2,11 +2,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { dirname, join, relative } from "node:path";
 import { type BenchTask } from "./core/types.ts";
 
-/**
- * One case as plain data: prompt, optional follow-up, files, private files, expected outputs and
- * answer key. This is the unit the runner consumes, whether it came from a generator or from a
- * directory on disk.
- */
+/** One case as plain data, the unit the runner consumes whether generated or loaded from disk. */
 export interface BenchCase {
   id: string;
   task: string;
@@ -66,10 +62,7 @@ function readTree(root: string): Record<string, string> {
   return out;
 }
 
-/**
- * Writes cases to <dir>/<case>/{case.json,files/,private/}. The directory is wiped first so a rebuild
- * never keeps a file that no longer exists.
- */
+/** Writes cases to <dir>/<case>/{case.json,files/,private/}, wiping the directory first. */
 export function writeCases(dir: string, cases: BenchCase[]): void {
   rmSync(dir, { recursive: true, force: true });
   for (const c of cases) {
@@ -82,10 +75,7 @@ export function writeCases(dir: string, cases: BenchCase[]): void {
   }
 }
 
-/**
- * Loads a dataset directory written by writeCases, checking that each folder holds the case it is
- * named for.
- */
+/** Loads a dataset directory written by writeCases, checking each folder holds the case it is named for. */
 export function loadCases(dir: string): BenchCase[] {
   return readdirSync(dir)
     .filter((name) => statSync(join(dir, name)).isDirectory())

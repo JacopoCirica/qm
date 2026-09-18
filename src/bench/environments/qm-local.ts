@@ -16,10 +16,7 @@ interface TurnOutcome {
   reply: string;
 }
 
-/**
- * One open case: send turns, read what was written under output/, pull the session log, and tear
- * everything down.
- */
+/** One open case: send turns, read output/, pull the session log, tear everything down. */
 interface CaseSession {
   turn(text: string): Promise<TurnOutcome>;
   outputs(): Promise<Outputs>;
@@ -33,10 +30,7 @@ export interface Environment {
   close(): Promise<void>;
 }
 
-/**
- * Which qm harness and model to drive, plus an optional OpenAI-compatible endpoint registered as a
- * custom provider.
- */
+/** Which harness and model to drive, plus an optional OpenAI-compatible endpoint as a custom provider. */
 export interface QmLocalOptions {
   harness: Config["harness"];
   modelId: string;
@@ -54,10 +48,7 @@ function dm(actorId: string, text: string): TurnRequest {
   };
 }
 
-/**
- * Force-removes the container, volume and network the local sandbox created for a case and its partner
- * scope. Leaked networks exhaust Docker's address pool after enough runs.
- */
+/** Force-removes a case's container, volume and network; leaked networks exhaust Docker's address pool. */
 function removeDockerResources(actorId: string): void {
   for (const suffix of ["", "-partners"]) {
     const scope = scopeId("personal", `${actorId}${suffix}`);
@@ -68,11 +59,7 @@ function removeDockerResources(actorId: string): void {
   }
 }
 
-/**
- * Boots one qm core with in-memory stores and the local sandbox. Each case gets a fresh actor and
- * scope, its files seeded through a throwaway sandbox, and its own cleanup; close() stops the runtime
- * and deletes the data dir.
- */
+/** Boots one qm core on the local sandbox; each case gets a fresh actor, scope, seeded files and cleanup. */
 export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Environment> {
   const dataDir = mkdtempSync(join(tmpdir(), "qm-bench-"));
   const config: Config = {

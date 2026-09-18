@@ -29,20 +29,14 @@ export interface UpdateKey {
  */
 const HEADER = ["slug", "name", "sector", "mrr_usd", "headcount", "last_update"];
 
-/**
- * How the founder states MRR: in words or figures, sometimes in EUR so the agent must convert at
- * the fx rate.
- */
+/** How the founder states MRR: words or figures, sometimes in EUR to convert at the fx rate. */
 function mrrPhrase(r: Rng, newMrr: number | undefined, inEur: boolean, eurRate: number): string {
   if (newMrr === undefined) return "";
   if (inEur) return `€${(Math.round((newMrr / eurRate) * 100) / 100).toLocaleString("en-US")} MRR`;
   return `MRR ${moneyPhrase(r, newMrr)}`;
 }
 
-/**
- * A thread date at least two days from any other thread of the same company, so 'the newer
- * thread wins' always has one answer even after a next-day correction.
- */
+/** A thread date two or more days from the company's others, so the newer thread is clear. */
 function freshDate(r: Rng, used: Set<string>): string {
   for (;;) {
     const date = addDays("2026-09-01", r.int(0, 25));
@@ -53,12 +47,7 @@ function freshDate(r: Rng, used: Set<string>): string {
   }
 }
 
-/**
- * Builds one case: 200 companies, 120 of them with one or two update threads. A thread may state
- * a wrong MRR first and correct it a day later, may give MRR in EUR, and may omit a figure; the
- * newer thread per company wins. Eight threads come from domains outside the portfolio and must
- * be ignored. The key applies the same rules to a copy of the rows.
- */
+/** Builds 200 companies and 120 update threads with corrections, EUR and outside senders. */
 export function generate(seed: number): Fixture<UpdateKey> {
   const r = rng(seed * 7727 + 1);
   const names = companyNames(r, 200);

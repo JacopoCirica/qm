@@ -3,10 +3,7 @@ import { constraintChecks } from "../../families/events-assign.ts";
 import { readAssignments } from "../../families/events.ts";
 import type { ChangesKey } from "./generate.ts";
 
-/**
- * Rewards the shared constraint checks on the final world plus: stayers left in their seats (minimal churn),
- * withdrawn attendees absent, and the follow-up's cancelled session empty.
- */
+/** Rewards the shared checks on the final world plus minimal churn, withdrawals gone, cancelled session empty. */
 export async function verify(outputs: Outputs, key: ChangesKey): Promise<Check[]> {
   const { assign, rows } = readAssignments(await outputs.read("output/assignments.csv"));
   const base = constraintChecks(key.finalWorld, assign, rows, key.baselineTop2);

@@ -3,10 +3,7 @@ import { assignmentCsv } from "../../families/events.ts";
 import { type AssignKey, generate, solve } from "./generate.ts";
 import { verify } from "./verify.ts";
 
-/**
- * Assign roughly ten thousand attendees to breakout sessions under capacity and per-company caps, seating
- * speakers first and honouring registration changes, while maximising top-two preferences.
- */
+/** Assign ~10,000 attendees to sessions under caps, seating speakers first and honouring late changes. */
 export function task(): BenchTask {
   return defineTask<AssignKey>({
     id: "events-assign-sessions",

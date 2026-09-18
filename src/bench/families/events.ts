@@ -45,10 +45,7 @@ const TITLES = list(`
   production
 `);
 
-/**
- * Generates an event of the given size, then scales each slot's capacities to about 108% of that
- * slot's demand so seats are scarce but feasible.
- */
+/** Generates an event, then scales capacities to about 108% of each slot's demand so seats are scarce. */
 export function buildWorld(r: Rng, attendeeCount: number): World {
   const sessions: Session[] = TITLES.map((title, i) => ({
     id: `S${i + 1}`,

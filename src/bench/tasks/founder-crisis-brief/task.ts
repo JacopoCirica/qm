@@ -2,12 +2,7 @@ import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type CrisisKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
-/**
- * Founder crisis brief: the agent reads a founder's multi-issue email thread, our check-in notes and
- * the precedent library, and writes a grounded brief for the partner on call.
- * Tests reading the newest note by its internal date, obeying a correction later in the thread,
- * ignoring a planted 'use the summary' instruction, and reporting a conflict instead of resolving it.
- */
+/** Write a grounded crisis brief from a founder thread, check-in notes and precedents; report conflicts. */
 export function task(): BenchTask {
   return defineTask<CrisisKey>({
     id: "founder-crisis-brief",
@@ -28,10 +23,7 @@ export function task(): BenchTask {
   });
 }
 
-/**
- * Reference brief built straight from the key: corrected runway, newest-note MRR (or null plus
- * both paths when the case plants a conflict), every matching precedent, and generic next steps.
- */
+/** Reference brief from the key: corrected runway, newest-note MRR or a reported conflict, precedents. */
 export function gold(f: Fixture<CrisisKey>): Record<string, string> {
   const k = f.key;
   return {

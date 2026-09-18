@@ -2,12 +2,7 @@ import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type TriageKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
-/**
- * Triage: the agent infers the partners' unwritten flagging thresholds from last quarter's
- * decisions and applies them to the current portfolio export.
- * Tests rule inference from boundary rows and taking only the latest row per slug from an
- * append-only export.
- */
+/** Triage: infer the partners' unwritten thresholds from past decisions and apply them now. */
 export function task(): BenchTask {
   return defineTask<TriageKey>({
     id: "portfolio-triage-attention",

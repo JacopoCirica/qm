@@ -7,11 +7,7 @@ import { qmLocalEnvironment, type Environment } from "../src/bench/environments/
 import { grade, memoryOutputs, type BenchTask } from "../src/bench/core/types.ts";
 import { allTasks, goldOutputs, verifierFor } from "../src/bench/registry.ts";
 
-/**
- * qm-bench runner: takes a dataset (generators or QM_BENCH_DATASET), applies it to an environment,
- * grades every case with the task's verifier and writes one JSON record per case plus summary.json.
- * All options are environment variables; see adrs/qm-bench.md.
- */
+/** Runner: loads cases, runs each in an environment, grades, writes per-case JSON and summary.json. */
 const modelId = process.env.PI_MODEL;
 if (!modelId) {
   console.error(
@@ -54,10 +50,7 @@ if (cases.length === 0) {
   process.exit(1);
 }
 
-/**
- * Everything saved for one attempt: grades, deliverables, the messages and the session entries, so a
- * run doubles as a batch of trajectories. error is set only for execution failures.
- */
+/** Everything saved for one attempt, so a run doubles as trajectories; error marks execution failures. */
 interface CaseRecord {
   task: string;
   family: string;
@@ -103,10 +96,7 @@ function failedRecord(benchCase: BenchCase, startedAt: string, error: string): C
   };
 }
 
-/**
- * Runs one case end to end: prompt, optional follow-up, read output/, grade. A turn that failed or
- * errored throws so the caller records an execution failure instead of grading empty output.
- */
+/** Runs one case: prompt, optional follow-up, grade. A failed turn throws so it counts as an execution failure. */
 async function runCase(env: Environment, benchCase: BenchCase): Promise<CaseRecord> {
   const startedAt = new Date().toISOString();
   const messages: CaseRecord["messages"] = [];
@@ -166,10 +156,7 @@ async function runCaseWithBackoff(env: Environment, benchCase: BenchCase): Promi
   }
 }
 
-/**
- * The check ids a task's verifier produces, found by grading its gold answer offline, so a results
- * consumer can list them as the task's criteria.
- */
+/** The check ids a task's verifier produces, found by grading its gold answer offline. */
 async function checkIds(task: BenchTask): Promise<string[]> {
   const fixture = task.generate(1);
   const graded = await grade(task, memoryOutputs(goldOutputs(task, fixture)), fixture.key);
@@ -217,10 +204,7 @@ try {
 const graded = records.filter((r) => r.error === null);
 const errored = records.length - graded.length;
 
-/**
- * Per-task block of summary.json. pass_rate covers graded cases only; execution_failures lists the
- * cases left out.
- */
+/** Per-task block of summary.json; pass_rate covers graded cases, execution_failures lists the rest. */
 interface TaskSummary {
   family: string;
   difficulty: string;

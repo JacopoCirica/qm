@@ -1,8 +1,4 @@
-/**
- * mulberry32, a seeded 32-bit PRNG. Math.random cannot be seeded and every case must regenerate byte
- * for byte from its number, so the bench carries its own generator. The constant and shifts are the
- * reference algorithm.
- */
+/** mulberry32, a seeded PRNG: Math.random cannot be seeded and every case must regenerate from its number. */
 function createRng(seed: number): () => number {
   let a = seed >>> 0 || 1;
   return () => {
@@ -14,10 +10,7 @@ function createRng(seed: number): () => number {
   };
 }
 
-/**
- * The random helpers every generator draws from. All randomness in a fixture must come through one of
- * these so a case is fully determined by its seed.
- */
+/** The random helpers generators draw from; all randomness goes through these so a seed fixes a case. */
 export interface Rng {
   next(): number;
   int(lo: number, hi: number): number;
@@ -27,10 +20,7 @@ export interface Rng {
   chance(p: number): boolean;
 }
 
-/**
- * Builds an Rng from a seed. Generators mix a task-specific constant into the seed so two tasks never
- * see the same stream.
- */
+/** Builds an Rng; generators mix in a task constant so two tasks never share a stream. */
 export function rng(seed: number): Rng {
   const next = createRng(seed);
   const int = (lo: number, hi: number): number => lo + Math.floor(next() * (hi - lo + 1));

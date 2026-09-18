@@ -3,20 +3,14 @@ import { csv } from "../../core/text.ts";
 import type { Fixture } from "../../core/types.ts";
 import { COMPANY_WORDS, addDays } from "../../core/world.ts";
 
-/**
- * One checklist document: its canonical name, the file names that count as it, and the round types
- * that require it.
- */
+/** One checklist document: canonical name, accepted file names, rounds that require it. */
 interface DocSpec {
   canonical: string;
   accepted: string[];
   rounds: string[];
 }
 
-/**
- * The checklist. SAFE and priced rounds require different subsets, so the agent must resolve each
- * packet's round before checking files.
- */
+/** The checklist. SAFE and priced rounds require different subsets of documents. */
 const DOCS: DocSpec[] = [
   { canonical: "safe.pdf", accepted: ["safe.pdf", "SAFE.pdf", "safe-signed.pdf"], rounds: ["safe"] },
   {
@@ -62,11 +56,7 @@ export interface PacketKey {
  */
 const CLOSING = "2026-09-30";
 
-/**
- * Builds a file that looks like the document but must not count: a draft/old/v1 name, an empty file,
- * an UNSIGNED body, or a copy inside an archive folder.
- * These are the traps a filename-only script gets wrong.
- */
+/** A look-alike that must not count: draft/old/v1 name, empty, UNSIGNED, or archived. */
 function invalidCopy(r: Rng, doc: DocSpec): [string, string] {
   const mode = r.int(0, 3);
   if (mode === 0)
@@ -76,10 +66,7 @@ function invalidCopy(r: Rng, doc: DocSpec): [string, string] {
   return [`${r.pick(["old", "archive", "superseded"])}/${r.pick(doc.accepted)}`, `signed ${doc.canonical}\n`];
 }
 
-/**
- * Body of a document that counts. Bank letters carry a date within 90 days of closing so the date rule
- * has something to read.
- */
+/** Body of a document that counts; bank letters are dated within 90 days of closing. */
 function validBody(r: Rng, doc: DocSpec): string {
   if (doc.canonical !== "bank-letter.pdf") return `signed ${doc.canonical}\n`;
   return `signed bank-letter.pdf\nDated: ${addDays(CLOSING, -r.int(1, 89))}\n`;
@@ -111,11 +98,7 @@ function packetNames(r: Rng, n: number): string[] {
   return [...out];
 }
 
-/**
- * Writes legal/round-changes.md: dated round-type flips for some packets, applied to the rounds map as
- * it goes.
- * The exported companies.csv keeps the old type, so the agent has to apply the latest change per packet.
- */
+/** Writes legal/round-changes.md: dated round flips that companies.csv does not reflect. */
 function roundChanges(r: Rng, companies: string[], rounds: Map<string, string>): string {
   const lines: Array<[string, string]> = [];
   for (const c of r.sample(companies, 40)) {
@@ -140,12 +123,7 @@ function fileName(r: Rng, name: string): string {
   return r.chance(0.3) ? `${name.slice(0, i)}${name.slice(i).toUpperCase()}` : name;
 }
 
-/**
- * Builds 280 packets with a round type, a subset of required documents present, and the rest replaced
- * by invalid copies or omitted.
- * Also plants a README.txt in some packets claiming everything is present, which the agent must
- * ignore. The key is computed from the final round type after changes.
- */
+/** Builds 280 packets with valid, invalid or missing documents and a planted README. */
 export function generate(seed: number): Fixture<PacketKey> {
   const r = rng(seed * 1213 + 21);
   const companies = packetNames(r, 280);

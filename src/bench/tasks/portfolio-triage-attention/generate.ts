@@ -69,10 +69,7 @@ function metrics(r: Rng, name: string, over: Partial<Metrics> = {}): Metrics {
   };
 }
 
-/**
- * Six history rows sitting exactly on and one step past each threshold, so the strict-versus-
- * inclusive question has one answer in the data.
- */
+/** Six history rows on and one step past each threshold settle strict versus inclusive. */
 function boundaryCases(r: Rng, names: string[], { runwayBelow, staleAfter, growthBelow }: Rules): Metrics[] {
   return [
     metrics(r, names[0]!, {
@@ -104,10 +101,7 @@ function boundaryCases(r: Rng, names: string[], { runwayBelow, staleAfter, growt
   ];
 }
 
-/**
- * The current export as an append-only table: some slugs get an older row with different numbers
- * and an earlier as_of, and only the latest as_of counts.
- */
+/** The current export as an append-only table where only a slug's latest as_of row counts. */
 function currentRows(r: Rng, current: Metrics[]): Array<Array<string | number>> {
   const row = (c: Metrics, asOf: string): Array<string | number> => [
     c.slug,
@@ -127,11 +121,7 @@ function currentRows(r: Rng, current: Metrics[]): Array<Array<string | number>> 
   return r.shuffle(rows);
 }
 
-/**
- * Builds one case: thresholds drawn at random, 120 historical decisions including the boundary
- * rows, 180 current companies with duplicate stale rows, and a README that defines the ordering
- * convention and what each rule means when written down.
- */
+/** Builds random thresholds, 120 past decisions with boundary rows, and 180 current companies. */
 export function generate(seed: number): Fixture<TriageKey> {
   const r = rng(seed * 6007 + 2);
   const rules: Rules = {

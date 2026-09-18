@@ -1,9 +1,6 @@
 import type { Rng } from "./rng.ts";
 
-/**
- * Writes a CSV with RFC-style quoting. Fixture exports go through here so agents see ordinary
- * spreadsheets.
- */
+/** Writes a CSV with RFC-style quoting so fixture exports look like ordinary spreadsheets. */
 export function csv(header: string[], rows: Array<Array<string | number>>): string {
   const cell = (v: string | number): string => {
     const s = String(v);
@@ -12,14 +9,8 @@ export function csv(header: string[], rows: Array<Array<string | number>>): stri
   return [header.join(","), ...rows.map((r) => r.map(cell).join(","))].join("\n") + "\n";
 }
 
-/**
- * Reads a CSV written by an agent into rows keyed by header. Lenient on blank lines and stray carriage
- * returns so a verifier judges content, not formatting.
- */
-/**
- * Splits a comma-separated word pool written as one string, so long lists stay a few lines. Line
- * breaks inside an entry collapse to one space.
- */
+/** Reads an agent's CSV into rows keyed by header, lenient on blank lines and carriage returns. */
+/** Splits a comma-separated word pool written as one string; line breaks inside an entry become a space. */
 export function list(text: string): string[] {
   return text
     .split(",")
@@ -65,10 +56,7 @@ function splitCsvLine(line: string): string[] {
   return out;
 }
 
-/**
- * Parses agent output as JSON, returning undefined for a missing file or invalid text so verifiers can
- * score it as a miss instead of crashing.
- */
+/** Parses agent output as JSON, undefined when missing or invalid so verifiers score a miss, not a crash. */
 export function parseJson(text: string | null): unknown {
   if (text === null) return undefined;
   try {
@@ -88,20 +76,14 @@ export function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
-/**
- * Coerces an agent-supplied value to a trimmed string; anything that is not a string or number becomes
- * empty.
- */
+/** Coerces an agent value to a trimmed string; anything but a string or number becomes empty. */
 export function str(value: unknown): string {
   if (typeof value === "string") return value.trim();
   if (typeof value === "number") return String(value);
   return "";
 }
 
-/**
- * Parses money and numbers the way a person wrote them: strips $ and commas, treats (123) as negative,
- * NaN otherwise.
- */
+/** Parses numbers as people write them: strips $ and commas, (123) is negative, NaN otherwise. */
 export function num(value: unknown): number {
   if (typeof value === "number") return value;
   if (typeof value === "string") {
@@ -112,10 +94,7 @@ export function num(value: unknown): number {
   return NaN;
 }
 
-/**
- * Case-insensitive set F1 between an expected and an actual list. The standard partial-credit score
- * for list deliverables; identical empty sets score 1.
- */
+/** Case-insensitive set F1 between expected and actual, the partial-credit score for list deliverables. */
 export function f1(expected: Iterable<string>, actual: Iterable<string>): number {
   const e = new Set([...expected].map((s) => s.toLowerCase()));
   const a = new Set([...actual].map((s) => s.toLowerCase()));
@@ -128,10 +107,7 @@ export function f1(expected: Iterable<string>, actual: Iterable<string>): number
   return (2 * precision * recall) / (precision + recall);
 }
 
-/**
- * Fraction of expected pairs that appear in the right relative order in the actual list. Scores
- * ordering separately from membership.
- */
+/** Fraction of expected pairs in the right relative order in the actual list; scores order, not membership. */
 export function orderScore(expected: string[], actual: string[]): number {
   const pos = new Map(actual.map((id, i) => [id.toLowerCase(), i] as const));
   let pairs = 0;
@@ -185,10 +161,7 @@ export function numberWords(n: number): string {
   return scaled("million", Math.floor(n / 1000000), n % 1000000);
 }
 
-/**
- * Picks one of several ways people write a dollar amount ($1,200, $1.2k, USD 1200, words). Fixtures
- * use it so an agent cannot grep for one format.
- */
+/** Renders a dollar amount in one of several formats so an agent cannot grep for one style. */
 export function moneyPhrase(r: Rng, n: number): string {
   const k = n / 1000;
   return r.pick([
@@ -208,10 +181,7 @@ export interface Mail {
   body: string;
 }
 
-/**
- * Renders a thread the way mail clients do: each reply quotes every earlier message with > prefixes.
- * This is how stale ids and figures end up restated inside a newer email.
- */
+/** Renders a thread with quoted history, which is how stale ids and figures get restated in newer mail. */
 export function emailThread(mails: Mail[]): string {
   const out: string[] = [];
   mails.forEach((m, i) => {

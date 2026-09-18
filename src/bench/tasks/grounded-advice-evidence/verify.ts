@@ -2,10 +2,7 @@ import { asArray, asRecord, close, num, parseJson, str } from "../../core/text.t
 import type { Check, Outputs } from "../../core/types.ts";
 import type { AdviceKey } from "./generate.ts";
 
-/**
- * Checks each reported number against the key within a small tolerance, the recommendation, both
- * inferred thresholds, and that sources cite the metrics file and at least one memo.
- */
+/** Checks each number within tolerance, the recommendation, both thresholds, and the cited sources. */
 export async function verify(outputs: Outputs, key: AdviceKey): Promise<Check[]> {
   const o = asRecord(parseJson(await outputs.read("output/advice.json")));
   const sources = asArray(o.sources).map(str);

@@ -10,10 +10,7 @@ function reasonList(value: unknown): string[] {
   return parts.map((x) => x.trim().toLowerCase()).filter(Boolean);
 }
 
-/**
- * Checks the three inferred thresholds exactly, the flagged set, the reason codes per company,
- * and the runway-then-slug order.
- */
+/** Checks the three thresholds exactly, the flagged set, reason codes, and the sort order. */
 export async function verify(outputs: Outputs, key: TriageKey): Promise<Check[]> {
   const o = asRecord(parseJson(await outputs.read("output/triage.json")));
   const rules = asRecord(o.rules);

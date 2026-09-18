@@ -49,10 +49,7 @@ import {
   task as knowledgeRefreshStale,
 } from "./tasks/knowledge-refresh-stale/task.ts";
 
-/**
- * Every task in the bench, in taxonomy order. Adding a task means adding its folder under tasks/ and
- * one line here plus one in GOLD.
- */
+/** Every task in taxonomy order; a new task is a folder under tasks/, one line here and one in GOLD. */
 export function allTasks(): BenchTask[] {
   return [
     founderCrisisBrief(),

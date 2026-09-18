@@ -12,10 +12,7 @@ interface Commitment {
   due: string;
 }
 
-/**
- * Answer key: the commitments after the follow-up corrections, the subset still open as of asOf
- * with overdue flags, and the corrections themselves so the follow-up prompt can be built.
- */
+/** Answer key: commitments after corrections, the open subset, and the corrections themselves. */
 export interface CommitmentsKey {
   founder: string;
   partner: string;
@@ -50,10 +47,7 @@ function dayOf(iso: string): number {
   return new Date(`${iso}T00:00:00Z`).getUTCDate();
 }
 
-/**
- * Relative phrasings and their offsets from the meeting date. The agent has to resolve these
- * against the date in the transcript header.
- */
+/** Relative phrasings and their offsets from the meeting date in the transcript header. */
 const RELATIVE: Array<[string, number]> = [
   ["a week from today", 7],
   ["in ten days", 10],
@@ -70,32 +64,21 @@ function endOfMonth(iso: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-/**
- * How the due date is spoken in the transcript: end of month, a relative phrase when one fits, or
- * the bare day of month.
- */
+/** How a due date is spoken: end of month, a relative phrase when one fits, or the bare day. */
 function askFor(r: Rng, meetingDate: string, due: string): string {
   if (due === endOfMonth(meetingDate)) return "by the end of the month";
   const rel = RELATIVE.find(([, days]) => addDays(meetingDate, days) === due);
   return rel && r.chance(0.7) ? rel[0] : `by the ${dayOf(due)}${ordinal(dayOf(due))}`;
 }
 
-/**
- * Picks a due date, biased toward dates that can be spoken relatively so the transcript mixes
- * absolute and relative forms.
- */
+/** Picks a due date, biased toward ones that can be spoken relatively so forms are mixed. */
 function dueFor(r: Rng, meetingDate: string): string {
   if (r.chance(0.15)) return endOfMonth(meetingDate);
   if (r.chance(0.5)) return addDays(meetingDate, r.pick(RELATIVE)[1]);
   return addDays(meetingDate, r.int(2, 24));
 }
 
-/**
- * Builds one case: eight commitments spoken in mixed date forms, two of them restated later in
- * the meeting, shuffled among filler, ideas, declines, undated intentions and a cofounder's promise
- * that has no eligible owner; then the follow-up corrections (two moves, one cancellation, one
- * addition) and a completed list written in shortened wording.
- */
+/** Builds eight commitments in mixed date forms amid filler, then corrections and a done list. */
 export function generate(seed: number): Fixture<CommitmentsKey> {
   const r = rng(seed * 48611 + 9);
   const founder = personName(r);

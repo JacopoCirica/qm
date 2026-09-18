@@ -1,7 +1,4 @@
-/**
- * Task: diff each counterparty redline against the standard SAFE clause by clause and route the
- * material changes to a partner per the review policy.
- */
+/** Task: diff each redline against the standard SAFE and route material changes to a partner. */
 import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type RedlineKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";

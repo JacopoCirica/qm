@@ -77,10 +77,7 @@ function swapRoom(slot: Slot, pair: [Slot, Slot]): Slot {
   return slot;
 }
 
-/**
- * One three-message update thread whose last email holds the current tracking id and says who
- * attends; the older email may name a cofounder who no longer attends.
- */
+/** One three-message thread; only the last email's tracking id and attendee are current. */
 function thread(r: Rng, c: Company, latestDate: string): { text: string; latest: Latest } {
   const cofounder = personName(r);
   const swapFounder = r.chance(0.35);
@@ -109,10 +106,7 @@ function thread(r: Rng, c: Company, latestDate: string): { text: string; latest:
   return { text, latest: { date: latestDate, attendee: swapFounder ? cofounder : c.founder, tracker: current } };
 }
 
-/**
- * Writes one or two randomly named threads per company on distinct dates and returns what the
- * newest one says, which is what the brief must reflect.
- */
+/** Writes one or two randomly named threads per company and returns what the newest says. */
 function updates(r: Rng, companies: Company[], date: string, files: Record<string, string>): Map<string, Latest> {
   const latest = new Map<string, Latest>();
   for (const c of companies) {
@@ -127,12 +121,7 @@ function updates(r: Rng, companies: Company[], date: string, files: Record<strin
   return latest;
 }
 
-/**
- * Builds one case: 40 scheduled companies plus a pool for additions, a 16-message ops chat with
- * cancellations that get reinstated and cancelled again, a move that moves twice, an addition that
- * is dropped, and a swap that is reverted; then the update threads. The key applies the same chat
- * in order and takes each company's attendee and tracking id from its newest email.
- */
+/** Builds 40 scheduled companies, an ops chat full of reversals, and the update threads. */
 export function generate(seed: number): Fixture<BriefKey> {
   const r = rng(seed * 31337 + 3);
   const date = addDays("2026-09-08", r.int(0, 60));

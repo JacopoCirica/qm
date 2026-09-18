@@ -3,10 +3,7 @@ import { csv } from "../../core/text.ts";
 import type { Fixture } from "../../core/types.ts";
 import { COMPANY_WORDS } from "../../core/world.ts";
 
-/**
- * Answer key: the company's derived numbers, the recommendation they imply, and the two thresholds
- * the agent has to infer from the memos.
- */
+/** Answer key: the company's numbers, the recommendation they imply, and the two thresholds to infer. */
 export interface AdviceKey {
   latestMrr: number;
   growthPct: number;
@@ -17,10 +14,7 @@ export interface AdviceKey {
   growthThreshold: number;
 }
 
-/**
- * The firm's unwritten rule: enough runway means a priced round, otherwise strong growth means a
- * bridge, otherwise cut burn. Memos are generated from this so the agent can recover it.
- */
+/** The unwritten rule: enough runway means priced round, else strong growth means bridge, else cut burn. */
 function decide(runway: number, growth: number, tr: number, tg: number): AdviceKey["recommendation"] {
   if (runway >= tr) return "priced_round";
   if (growth >= tg) return "bridge";
@@ -36,13 +30,7 @@ const ADVICE_TEXT = {
   cut_burn: "we advised cutting burn before raising anything",
 };
 
-/**
- * Builds one case: thresholds drawn at random, nine memos placed exactly on and around the
- * boundaries so the thresholds are recoverable plus 21 random ones, half of them giving growth as
- * an MRR pair instead of a percentage; a metrics sheet with skipped months and three restated rows
- * for the last month where only the latest restated_on counts; and a founder question whose PS
- * states a runway that contradicts the sheet and must be ignored.
- */
+/** Builds memos on the threshold boundaries, a sheet with competing restatements, and a misleading PS. */
 export function generate(seed: number): Fixture<AdviceKey> {
   const r = rng(seed * 104729 + 5);
   const tr = r.pick([5, 6, 7]);

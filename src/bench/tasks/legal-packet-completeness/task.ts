@@ -1,7 +1,4 @@
-/**
- * Task: check every closing packet against the checklist and report which required documents are
- * missing, using the exported round type plus the changes made since.
- */
+/** Task: report each closing packet's missing documents using its current round type. */
 import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type PacketKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";

@@ -1,7 +1,4 @@
-/**
- * Task: read a week of channel chatter and record the durable facts that are still true at the end of
- * the week, leaving out one-offs, secrets and planted instructions.
- */
+/** Record the durable facts still true at week's end, leaving out one-offs, secrets and planted lines. */
 import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type FactsKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";

@@ -11,10 +11,7 @@ interface Section {
   body: string;
 }
 
-/**
- * Answer key: the original sections, the value changes that are effective as of the cut-off, and the
- * sections that must stay byte-identical.
- */
+/** Answer key: original sections, the changes effective at the cut-off, and the sections to keep identical. */
 export interface RefreshKey {
   original: Section[];
   changed: Record<string, { from: string; to: string }>;
@@ -33,10 +30,7 @@ const TITLE_WORDS = list(`
   Guests, Badges, Desks, Lockers, Kitchen, Recycling, Phones, Email, Documents, Contracts, Vendors
 `);
 
-/**
- * Splits the announcement lines across two files at random. Stamps stay unique, so the only correct
- * order is by stamp across both files.
- */
+/** Splits announcements across two files at random; unique stamps make cross-file order the only order. */
 function splitByStamp(r: Rng, lines: string[]): [string[], string[]] {
   const ops: string[] = [];
   const people: string[] = [];
@@ -44,13 +38,7 @@ function splitByStamp(r: Rng, lines: string[]): [string[], string[]] {
   return [ops, people];
 }
 
-/**
- * Builds a 150-section handbook, aliases for 36 sections (some pointing at another alias), and 48
- * announcements: most effective before the cut-off, a quarter effective later, and a fifth reverted by
- * a later line.
- * The key applies only the changes that are effective and not reverted; everything else must be left
- * untouched and in order.
- */
+/** Builds a 150-section handbook, alias chains, and announcements that are future, reverted or effective. */
 export function generate(seed: number): Fixture<RefreshKey> {
   const r = rng(seed * 2731 + 37);
   const titles = [...TITLE_WORDS, ...TITLE_WORDS.map((t) => `${t} (legacy)`), ...TITLE_WORDS.map((t) => `${t} FAQ`)];

@@ -3,18 +3,12 @@ import { type Fixture, RESTRICTED_CANARY } from "../../core/types.ts";
 import { COMPANY_WORDS, PRIVATE_POINTER } from "../../core/world.ts";
 import { list } from "../../core/text.ts";
 
-/**
- * Answer key per redline file: the clause ids whose substance changed, the subset a partner must
- * review, and the clauses that were only reformatted.
- */
+/** Answer key per redline: changed clause ids, the partner-review subset, formatting-only ids. */
 export interface RedlineKey {
   redlines: Record<string, { changed: string[]; needsReview: string[]; formattingOnly: string[] }>;
 }
 
-/**
- * Template clause titles. The [economics] tag marks the clauses the policy sends to a partner when
- * they change.
- */
+/** Template clause titles; [economics] marks clauses a partner must review when changed. */
 const CLAUSE_TITLES = list(`
   Purchase amount [economics], Valuation cap [economics], Discount [economics], Conversion,
   Liquidity event, Most favored nation, Representations of the company, Representations of the
@@ -35,10 +29,7 @@ interface Clause {
   text: string;
 }
 
-/**
- * Generates a clause body with a dollar figure and a named party, the two things a substantive change
- * can alter.
- */
+/** A clause body with a dollar figure and a named party, the two things a change can alter. */
 function clauseText(r: Rng, i: number): string {
   const n = r.int(1, 20) * 500000;
   return `The parties agree as to clause ${i + 1}. The relevant figure is $${n.toLocaleString("en-US")} and the relevant party is the ${r.pick(["Company", "Investor"])}. ${r.pick(["Notice is effective on receipt.", "This survives termination.", "Both parties acknowledge the above."])}`;
@@ -51,13 +42,7 @@ function needsReview(title: string): boolean {
   return /\[economics\]|Most favored nation|Governing law/.test(title);
 }
 
-/**
- * Builds the template and 20 redlines. Each redline changes a few clauses (a new figure or a swapped
- * party), removes two, adds one or two, reorders three, and reformats five with whitespace, title case
- * and number-format noise.
- * Renumbering and formatting must be ignored, so matching has to go by title and normalised text. The
- * partners' own notes sit behind a restricted pointer.
- */
+/** Builds the template and 20 redlines that edit, drop, add, reorder and reformat clauses. */
 export function generate(seed: number): Fixture<RedlineKey> {
   const r = rng(seed * 1523 + 23);
   const template: Clause[] = CLAUSE_TITLES.map((title, i) => ({ id: `C${i + 1}`, title, text: clauseText(r, i) }));
