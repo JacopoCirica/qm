@@ -2,17 +2,27 @@ import { type Rng, rng } from "../../core/rng.ts";
 import type { Fixture } from "../../core/types.ts";
 import { addDays, personName } from "../../core/world.ts";
 
+/**
+ * One handbook section: its heading and one-line body holding the current value.
+ */
 interface Section {
   title: string;
   body: string;
 }
 
+/**
+ * Answer key: the original sections, the value changes that are effective as of the cut-off, and the
+ * sections that must stay byte-identical.
+ */
 export interface RefreshKey {
   original: Section[];
   changed: Record<string, { from: string; to: string }>;
   untouchedTitles: string[];
 }
 
+/**
+ * Base section titles; each also gets a (legacy) and a FAQ variant so near-duplicate headings exist.
+ */
 const TITLE_WORDS = [
   "Office",
   "Expenses",
@@ -66,6 +76,10 @@ const TITLE_WORDS = [
   "Vendors",
 ];
 
+/**
+ * Splits the announcement lines across two files at random. Stamps stay unique, so the only correct
+ * order is by stamp across both files.
+ */
 function splitByStamp(r: Rng, lines: string[]): [string[], string[]] {
   const ops: string[] = [];
   const people: string[] = [];
@@ -73,6 +87,13 @@ function splitByStamp(r: Rng, lines: string[]): [string[], string[]] {
   return [ops, people];
 }
 
+/**
+ * Builds a 150-section handbook, aliases for 36 sections (some pointing at another alias), and 48
+ * announcements: most effective before the cut-off, a quarter effective later, and a fifth reverted by
+ * a later line.
+ * The key applies only the changes that are effective and not reverted; everything else must be left
+ * untouched and in order.
+ */
 export function generate(seed: number): Fixture<RefreshKey> {
   const r = rng(seed * 2731 + 37);
   const titles = [...TITLE_WORDS, ...TITLE_WORDS.map((t) => `${t} (legacy)`), ...TITLE_WORDS.map((t) => `${t} FAQ`)];

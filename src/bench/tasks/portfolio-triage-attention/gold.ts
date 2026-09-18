@@ -1,6 +1,9 @@
 import { type Fixture } from "../../core/types.ts";
 import { type TriageKey } from "./generate.ts";
 
+/**
+ * Reference answer: the key's thresholds and flagged list.
+ */
 export function gold(f: Fixture<TriageKey>): Record<string, string> {
   return {
     "output/triage.json": JSON.stringify({

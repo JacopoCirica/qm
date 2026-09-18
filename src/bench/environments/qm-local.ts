@@ -10,11 +10,16 @@ import type { SandboxHandle } from "../../sandbox/sandbox.ts";
 import type { BenchCase } from "../dataset.ts";
 import { type Outputs } from "../core/types.ts";
 
+/** What one agent turn came back with. */
 interface TurnOutcome {
   status: string;
   reply: string;
 }
 
+/**
+ * One open case: send turns, read what was written under output/, pull the session log, and tear
+ * everything down.
+ */
 interface CaseSession {
   turn(text: string): Promise<TurnOutcome>;
   outputs(): Promise<Outputs>;
@@ -22,11 +27,16 @@ interface CaseSession {
   close(): Promise<void>;
 }
 
+/** Where cases run. Swap this to run the same dataset somewhere other than the local Docker sandbox. */
 export interface Environment {
   open(benchCase: BenchCase, runId: string): Promise<CaseSession>;
   close(): Promise<void>;
 }
 
+/**
+ * Which qm harness and model to drive, plus an optional OpenAI-compatible endpoint registered as a
+ * custom provider.
+ */
 export interface QmLocalOptions {
   harness: Config["harness"];
   modelId: string;
@@ -34,6 +44,7 @@ export interface QmLocalOptions {
   providerKey?: string;
 }
 
+/** Wraps a prompt as a direct message from the case's actor, the way a Slack DM would arrive. */
 function dm(actorId: string, text: string): TurnRequest {
   return {
     surface: "bench",
@@ -43,6 +54,10 @@ function dm(actorId: string, text: string): TurnRequest {
   };
 }
 
+/**
+ * Force-removes the container, volume and network the local sandbox created for a case and its partner
+ * scope. Leaked networks exhaust Docker's address pool after enough runs.
+ */
 function removeDockerResources(actorId: string): void {
   for (const suffix of ["", "-partners"]) {
     const scope = scopeId("personal", `${actorId}${suffix}`);
@@ -53,6 +68,11 @@ function removeDockerResources(actorId: string): void {
   }
 }
 
+/**
+ * Boots one qm core with in-memory stores and the local sandbox. Each case gets a fresh actor and
+ * scope, its files seeded through a throwaway sandbox, and its own cleanup; close() stops the runtime
+ * and deletes the data dir.
+ */
 export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Environment> {
   const dataDir = mkdtempSync(join(tmpdir(), "qm-bench-"));
   const config: Config = {

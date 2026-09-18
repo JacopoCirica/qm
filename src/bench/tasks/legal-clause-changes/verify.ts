@@ -2,6 +2,11 @@ import { asArray, asRecord, f1, parseJson, str } from "../../core/text.ts";
 import type { Check, Outputs } from "../../core/types.ts";
 import type { RedlineKey } from "./generate.ts";
 
+/**
+ * Scores each redline's changed list and needs_review list as F1 against the key, averaged across
+ * redlines, plus the share of formatting-only clauses correctly left out.
+ * Bare numeric ids are normalised to C<n> so a counterparty's numbering does not fail the match.
+ */
 export async function verify(outputs: Outputs, key: RedlineKey): Promise<Check[]> {
   const o = asRecord(parseJson(await outputs.read("output/clause-review.json")));
   const names = Object.keys(key.redlines);

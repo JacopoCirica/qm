@@ -2,6 +2,10 @@ import { asArray, asRecord, f1, parseJson, str } from "../../core/text.ts";
 import type { Check, Outputs } from "../../core/types.ts";
 import type { BriefKey, Slot } from "./generate.ts";
 
+/**
+ * Checks the set of companies, that removed ones are absent, and per slot the time, room after
+ * swaps, attending founder and current tracking id, plus time-then-room ordering.
+ */
 export async function verify(outputs: Outputs, key: BriefKey): Promise<Check[]> {
   const o = asRecord(parseJson(await outputs.read("output/brief.json")));
   const slots = asArray(o.slots).map(asRecord);

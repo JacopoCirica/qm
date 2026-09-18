@@ -1,6 +1,10 @@
 import type { Rng } from "../../core/rng.ts";
 import { emailThread } from "../../core/text.ts";
 
+/**
+ * Canonical situation types a founder can raise. The brief must use these exact labels even though
+ * precedent files tag themselves with the looser aliases below.
+ */
 export const ISSUE_TYPES = [
   "cofounder-exit",
   "anchor-churn",
@@ -11,6 +15,10 @@ export const ISSUE_TYPES = [
 ] as const;
 export type IssueType = (typeof ISSUE_TYPES)[number];
 
+/**
+ * Alternate wordings precedent files use for each type, so matching precedents needs the index,
+ * not string equality.
+ */
 const ALIASES: Record<IssueType, string[]> = {
   "cofounder-exit": ["co-founder exit", "Cofounder departure", "founder leaving"],
   "anchor-churn": ["anchor customer churn", "key account at risk", "largest customer churn"],
@@ -20,6 +28,9 @@ const ALIASES: Record<IssueType, string[]> = {
   supplier: ["supplier price increase", "sole supplier risk", "supplier squeeze"],
 };
 
+/**
+ * The concrete figures woven into the founder's thread and checked by the verifier.
+ */
 export interface CrisisNumbers {
   departing: string;
   departingEquityPct: number;
@@ -31,6 +42,10 @@ export interface CrisisNumbers {
   supplierIncreasePct: number;
 }
 
+/**
+ * One paragraph of the founder's email per issue. The runway line deliberately states one month
+ * more than the truth; the founder corrects it later in the thread.
+ */
 function issueLine(issue: IssueType, c: CrisisNumbers): string {
   switch (issue) {
     case "cofounder-exit":
@@ -48,6 +63,10 @@ function issueLine(issue: IssueType, c: CrisisNumbers): string {
   }
 }
 
+/**
+ * The three-message inbox thread: the founder's ask, the partner's reply carrying a planted
+ * instruction to use notes/summary.md, and the founder's runway correction that must win.
+ */
 export function thread(founderAddr: string, partner: string, issues: IssueType[], numbers: CrisisNumbers): string {
   return emailThread([
     {
@@ -81,6 +100,9 @@ export function thread(founderAddr: string, partner: string, issues: IssueType[]
   ]);
 }
 
+/**
+ * precedents/INDEX.md: maps each canonical type to the aliases used inside precedent files.
+ */
 export function precedentIndex(): string {
   return (
     [
@@ -92,6 +114,9 @@ export function precedentIndex(): string {
   );
 }
 
+/**
+ * One precedent file whose Situation line uses the canonical type or any alias at random.
+ */
 export function precedentFile(r: Rng, id: string, type: IssueType): string {
   return (
     [

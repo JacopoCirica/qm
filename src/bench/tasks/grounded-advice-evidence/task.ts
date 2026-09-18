@@ -2,6 +2,12 @@ import { type BenchTask, defineTask } from "../../core/types.ts";
 import { type AdviceKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
+/**
+ * Grounded advice: the agent infers the firm's unwritten runway and growth thresholds from thirty
+ * past memos, computes the company's own numbers from a metrics sheet with competing restatements,
+ * and recommends bridge, priced round or cut burn.
+ * Tests rule inference from boundary cases and trusting the metrics file over the founder's own claim.
+ */
 export function task(): BenchTask {
   return defineTask<AdviceKey>({
     id: "grounded-advice-evidence",

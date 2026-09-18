@@ -2,6 +2,12 @@ import { type BenchTask, defineTask } from "../../core/types.ts";
 import { type UpdateKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
+/**
+ * Update records: the agent applies inbound founder update threads to the portfolio CSV, changing
+ * only the cells a founder's final word supports.
+ * Tests matching senders by domain, corrections later in a thread, the newer of two threads,
+ * EUR conversion, and leaving every other cell untouched at 200-row scale.
+ */
 export function task(): BenchTask {
   return defineTask<UpdateKey>({
     id: "portfolio-update-records",

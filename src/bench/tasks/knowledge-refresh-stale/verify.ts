@@ -1,6 +1,10 @@
 import type { Check, Outputs } from "../../core/types.ts";
 import type { RefreshKey } from "./generate.ts";
 
+/**
+ * Scores the corrected handbook: share of effective changes applied (new value present, old value
+ * gone), share of untouched sections byte-identical, and whether section order is preserved.
+ */
 export async function verify(outputs: Outputs, key: RefreshKey): Promise<Check[]> {
   const text = (await outputs.read("output/handbook.md")) ?? "";
   const sections = new Map<string, string>();

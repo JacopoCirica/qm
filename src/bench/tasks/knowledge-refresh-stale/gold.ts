@@ -1,6 +1,9 @@
 import type { Fixture } from "../../core/types.ts";
 import type { RefreshKey } from "./generate.ts";
 
+/**
+ * Reference answer: the original handbook with each keyed change substituted into its section body.
+ */
 export function gold(f: Fixture<RefreshKey>): Record<string, string> {
   const body = f.key.original
     .map((s) => {

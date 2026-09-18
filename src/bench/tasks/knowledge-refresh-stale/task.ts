@@ -1,3 +1,7 @@
+/**
+ * Task: bring the team handbook up to date by applying every announcement that is already effective,
+ * in stamp order across files, through the section aliases.
+ */
 import { type BenchTask, defineTask } from "../../core/types.ts";
 import { type RefreshKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";

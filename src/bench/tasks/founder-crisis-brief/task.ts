@@ -2,6 +2,12 @@ import { type BenchTask, defineTask } from "../../core/types.ts";
 import { type CrisisKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
+/**
+ * Founder crisis brief: the agent reads a founder's multi-issue email thread, our check-in notes and
+ * the precedent library, and writes a grounded brief for the partner on call.
+ * Tests reading the newest note by its internal date, obeying a correction later in the thread,
+ * ignoring a planted 'use the summary' instruction, and reporting a conflict instead of resolving it.
+ */
 export function task(): BenchTask {
   return defineTask<CrisisKey>({
     id: "founder-crisis-brief",

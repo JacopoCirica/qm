@@ -1,6 +1,9 @@
 import type { Fixture } from "../../core/types.ts";
 import type { AdviceKey } from "./generate.ts";
 
+/**
+ * Reference answer copied from the key with the standard sources list.
+ */
 export function gold(f: Fixture<AdviceKey>): Record<string, string> {
   const k = f.key;
   return {

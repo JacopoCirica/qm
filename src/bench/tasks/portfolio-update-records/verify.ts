@@ -2,6 +2,10 @@ import { close, num, parseCsv } from "../../core/text.ts";
 import { type Check, type Outputs } from "../../core/types.ts";
 import { type UpdateKey } from "./generate.ts";
 
+/**
+ * Checks the header, the row order, the fraction of mrr, headcount and last_update cells that
+ * match the key, and the fraction of name and sector cells left untouched.
+ */
 export async function verify(outputs: Outputs, key: UpdateKey): Promise<Check[]> {
   const rows = parseCsv((await outputs.read("output/companies.csv")) ?? "");
   const by = new Map(rows.map((r) => [r.slug ?? "", r] as const));

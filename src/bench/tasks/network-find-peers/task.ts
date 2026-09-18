@@ -2,6 +2,11 @@ import { type BenchTask, defineTask } from "../../core/types.ts";
 import { type PeersKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
+/**
+ * Find up to five founders in the community directory who match a peer-intro request, respecting do-
+ * not-contact,
+ * later record updates, and the requester's city.
+ */
 export function task(): BenchTask {
   return defineTask<PeersKey>({
     id: "network-find-peers",

@@ -32,6 +32,10 @@ import { gold as knowledgeCaptureFactsGold } from "./tasks/knowledge-capture-fac
 import { task as knowledgeRefreshStale } from "./tasks/knowledge-refresh-stale/task.ts";
 import { gold as knowledgeRefreshStaleGold } from "./tasks/knowledge-refresh-stale/gold.ts";
 
+/**
+ * Every task in the bench, in taxonomy order. Adding a task means adding its folder under tasks/ and
+ * one line here plus one in GOLD.
+ */
 export function allTasks(): BenchTask[] {
   return [
     founderCrisisBrief(),
@@ -53,8 +57,10 @@ export function allTasks(): BenchTask[] {
   ];
 }
 
+/** A gold solution: writes the correct deliverables straight from the answer key. */
 type Gold = (fixture: Fixture<never>) => Record<string, string>;
 
+/** Gold solutions by task id. They live outside the task so the runner never ships them into a sandbox. */
 const GOLD: Record<string, Gold> = {
   "founder-crisis-brief": founderCrisisBriefGold as Gold,
   "grounded-advice-evidence": groundedAdviceEvidenceGold as Gold,
@@ -74,12 +80,14 @@ const GOLD: Record<string, Gold> = {
   "knowledge-refresh-stale": knowledgeRefreshStaleGold as Gold,
 };
 
+/** The correct deliverables for a fixture. Tests grade these to prove every case is solvable. */
 export function goldOutputs(task: BenchTask, fixture: Fixture<unknown>): Record<string, string> {
   const gold = GOLD[task.id];
   if (!gold) throw new Error(`no gold solution registered for ${task.id}`);
   return gold(fixture as Fixture<never>);
 }
 
+/** Looks up the verifier for a task id, which is how a case loaded from disk finds its grader. */
 export function verifierFor(taskId: string): Verifier {
   const task = allTasks().find((t) => t.id === taskId);
   if (!task) throw new Error(`no verifier registered for task ${taskId}`);

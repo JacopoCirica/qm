@@ -7,6 +7,11 @@ import { qmLocalEnvironment, type Environment } from "../src/bench/environments/
 import { grade, memoryOutputs, type BenchTask } from "../src/bench/core/types.ts";
 import { allTasks, goldOutputs, verifierFor } from "../src/bench/registry.ts";
 
+/**
+ * qm-bench runner: takes a dataset (generators or QM_BENCH_DATASET), applies it to an environment,
+ * grades every case with the task's verifier and writes one JSON record per case plus summary.json.
+ * All options are environment variables; see adrs/qm-bench.md.
+ */
 const modelId = process.env.PI_MODEL;
 if (!modelId) {
   console.error(
@@ -36,6 +41,7 @@ const runId =
   process.env.QM_BENCH_RUN_ID ?? `${new Date().toISOString().replace(/[:.]/g, "-")}-${modelId.replace(/\//g, "_")}`;
 const outDir = join(process.env.QM_BENCH_OUT ?? "runs/qm-bench", runId);
 
+/** Backoff for provider 429s, which surface either as a thrown error or as a 429 in the assistant reply. */
 const RATE_LIMIT_PAUSE_MS = 70_000;
 const RATE_LIMIT_RETRIES = 3;
 
@@ -48,6 +54,10 @@ if (cases.length === 0) {
   process.exit(1);
 }
 
+/**
+ * Everything saved for one attempt: grades, deliverables, the messages and the session entries, so a
+ * run doubles as a batch of trajectories. error is set only for execution failures.
+ */
 interface CaseRecord {
   task: string;
   family: string;
@@ -69,6 +79,7 @@ interface CaseRecord {
   error: string | null;
 }
 
+/** Record for a case that could not be executed. Kept for diagnosis but excluded from every pass rate. */
 function failedRecord(benchCase: BenchCase, startedAt: string, error: string): CaseRecord {
   return {
     task: benchCase.task,
@@ -92,6 +103,10 @@ function failedRecord(benchCase: BenchCase, startedAt: string, error: string): C
   };
 }
 
+/**
+ * Runs one case end to end: prompt, optional follow-up, read output/, grade. A turn that failed or
+ * errored throws so the caller records an execution failure instead of grading empty output.
+ */
 async function runCase(env: Environment, benchCase: BenchCase): Promise<CaseRecord> {
   const startedAt = new Date().toISOString();
   const messages: CaseRecord["messages"] = [];
@@ -136,6 +151,7 @@ async function runCase(env: Environment, benchCase: BenchCase): Promise<CaseReco
   }
 }
 
+/** Retries a case a few times when the provider rate-limits it. */
 async function runCaseWithBackoff(env: Environment, benchCase: BenchCase): Promise<CaseRecord> {
   for (let retry = 0; ; retry++) {
     try {
@@ -150,12 +166,17 @@ async function runCaseWithBackoff(env: Environment, benchCase: BenchCase): Promi
   }
 }
 
+/**
+ * The check ids a task's verifier produces, found by grading its gold answer offline. The platform
+ * ingest lists these as the task's criteria.
+ */
 async function checkIds(task: BenchTask): Promise<string[]> {
   const fixture = task.generate(1);
   const graded = await grade(task, memoryOutputs(goldOutputs(task, fixture)), fixture.key);
   return graded.checks.map((c) => c.id);
 }
 
+/** Mean rounded to four decimals, or null when there is nothing to average. */
 function mean(ns: number[]): number | null {
   return ns.length === 0 ? null : Math.round((ns.reduce((s, n) => s + n, 0) / ns.length) * 10000) / 10000;
 }
@@ -196,6 +217,10 @@ try {
 const graded = records.filter((r) => r.error === null);
 const errored = records.length - graded.length;
 
+/**
+ * Per-task block of summary.json. pass_rate covers graded cases only; execution_failures lists the
+ * cases left out.
+ */
 interface TaskSummary {
   family: string;
   difficulty: string;

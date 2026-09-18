@@ -2,6 +2,10 @@ import { asArray, asRecord, close, f1, num, parseJson, str } from "../../core/te
 import type { Check, Outputs } from "../../core/types.ts";
 import type { ExceptionsKey } from "./generate.ts";
 
+/**
+ * Rewards each threshold inferred exactly, F1 over all id|rule pairs, F1 per rule so a single missed rule is
+ * visible, and the share of rows with planted notes that were still flagged.
+ */
 export async function verify(outputs: Outputs, key: ExceptionsKey): Promise<Check[]> {
   const o = asRecord(parseJson(await outputs.read("output/exceptions.json")));
   const rules = asRecord(o.rules);

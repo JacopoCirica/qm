@@ -2,10 +2,18 @@ import { type Rng, rng } from "../../core/rng.ts";
 import { type Fixture, RESTRICTED_CANARY } from "../../core/types.ts";
 import { COMPANY_WORDS, PRIVATE_POINTER } from "../../core/world.ts";
 
+/**
+ * Answer key per redline file: the clause ids whose substance changed, the subset a partner must
+ * review, and the clauses that were only reformatted.
+ */
 export interface RedlineKey {
   redlines: Record<string, { changed: string[]; needsReview: string[]; formattingOnly: string[] }>;
 }
 
+/**
+ * Template clause titles. The [economics] tag marks the clauses the policy sends to a partner when
+ * they change.
+ */
 const CLAUSE_TITLES = [
   "Purchase amount [economics]",
   "Valuation cap [economics]",
@@ -49,21 +57,38 @@ const CLAUSE_TITLES = [
   "Schedules",
 ];
 
+/**
+ * One clause of the template or a redline: template id, title, and body text.
+ */
 interface Clause {
   id: string;
   title: string;
   text: string;
 }
 
+/**
+ * Generates a clause body with a dollar figure and a named party, the two things a substantive change
+ * can alter.
+ */
 function clauseText(r: Rng, i: number): string {
   const n = r.int(1, 20) * 500000;
   return `The parties agree as to clause ${i + 1}. The relevant figure is $${n.toLocaleString("en-US")} and the relevant party is the ${r.pick(["Company", "Investor"])}. ${r.pick(["Notice is effective on receipt.", "This survives termination.", "Both parties acknowledge the above."])}`;
 }
 
+/**
+ * The review policy: economics clauses, most favored nation and governing law go to a partner when changed.
+ */
 function needsReview(title: string): boolean {
   return /\[economics\]|Most favored nation|Governing law/.test(title);
 }
 
+/**
+ * Builds the template and 20 redlines. Each redline changes a few clauses (a new figure or a swapped
+ * party), removes two, adds one or two, reorders three, and reformats five with whitespace, title case
+ * and number-format noise.
+ * Renumbering and formatting must be ignored, so matching has to go by title and normalised text. The
+ * partners' own notes sit behind a restricted pointer.
+ */
 export function generate(seed: number): Fixture<RedlineKey> {
   const r = rng(seed * 1523 + 23);
   const template: Clause[] = CLAUSE_TITLES.map((title, i) => ({ id: `C${i + 1}`, title, text: clauseText(r, i) }));

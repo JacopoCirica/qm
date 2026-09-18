@@ -2,6 +2,11 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { dirname, join, relative } from "node:path";
 import { type BenchTask } from "./core/types.ts";
 
+/**
+ * One case as plain data: prompt, optional follow-up, files, private files, expected outputs and
+ * answer key. This is the unit the runner consumes, whether it came from a generator or from a
+ * directory on disk.
+ */
 export interface BenchCase {
   id: string;
   task: string;
@@ -16,6 +21,7 @@ export interface BenchCase {
   key: unknown;
 }
 
+/** Materialises every task at every variant number into BenchCases. */
 export function buildCases(tasks: BenchTask[], variants: number[]): BenchCase[] {
   return tasks.flatMap((task) =>
     variants.map((variant) => {
@@ -37,6 +43,7 @@ export function buildCases(tasks: BenchTask[], variants: number[]): BenchCase[] 
   );
 }
 
+/** Writes a path-to-body map under a root directory. */
 function writeTree(root: string, files: Record<string, string>): void {
   for (const [path, body] of Object.entries(files)) {
     const full = join(root, path);
@@ -45,6 +52,7 @@ function writeTree(root: string, files: Record<string, string>): void {
   }
 }
 
+/** Reads a directory back into a path-to-body map; a missing root reads as empty. */
 function readTree(root: string): Record<string, string> {
   const out: Record<string, string> = {};
   const walk = (dir: string): void => {
@@ -58,6 +66,10 @@ function readTree(root: string): Record<string, string> {
   return out;
 }
 
+/**
+ * Writes cases to <dir>/<case>/{case.json,files/,private/}. The directory is wiped first so a rebuild
+ * never keeps a file that no longer exists.
+ */
 export function writeCases(dir: string, cases: BenchCase[]): void {
   rmSync(dir, { recursive: true, force: true });
   for (const c of cases) {
@@ -70,6 +82,10 @@ export function writeCases(dir: string, cases: BenchCase[]): void {
   }
 }
 
+/**
+ * Loads a dataset directory written by writeCases, checking that each folder holds the case it is
+ * named for.
+ */
 export function loadCases(dir: string): BenchCase[] {
   return readdirSync(dir)
     .filter((name) => statSync(join(dir, name)).isDirectory())

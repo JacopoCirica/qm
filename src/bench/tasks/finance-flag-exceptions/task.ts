@@ -2,6 +2,11 @@ import { type BenchTask, defineTask } from "../../core/types.ts";
 import { type ExceptionsKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
+/**
+ * Infer the expense policy from last month's audit verdicts and flag every exception in this month's
+ * expenses,
+ * one entry per broken rule.
+ */
 export function task(): BenchTask {
   return defineTask<ExceptionsKey>({
     id: "finance-flag-exceptions",

@@ -3,6 +3,7 @@ import type { Fixture } from "../../core/types.ts";
 import { COMPANY_WORDS, addDays, personName } from "../../core/world.ts";
 import { type Exports, VENDORS, accounting, cents, euDate, exportFiles, usDate } from "./exports.ts";
 
+/** One row of the consolidated ledger the agent must produce. */
 interface Ledger {
   date: string;
   amount: number;
@@ -11,6 +12,10 @@ interface Ledger {
   ref: string;
 }
 
+/**
+ * Answer key: the expected ledger rows plus per-source counts and totals, and the refs of the card and PayPal
+ * rows that are settlements of bank rows and must be dropped.
+ */
 export interface ConsolidateKey {
   totals: Record<string, number>;
   counts: Record<string, number>;
@@ -19,6 +24,10 @@ export interface ConsolidateKey {
   rows: Ledger[];
 }
 
+/**
+ * Shared state threaded through the row builders: the rng, the growing ledger, the EUR rate and the
+ * ref counter.
+ */
 interface Build {
   r: Rng;
   rows: Ledger[];
@@ -26,10 +35,12 @@ interface Build {
   ref(): string;
 }
 
+/** Random date inside the August 2026 statement period. */
 function augustDate(r: Rng): string {
   return addDays("2026-08-01", r.int(0, 30));
 }
 
+/** 500 to 700 bank rows in accounting format. Every one belongs in the ledger. */
 function bankRows(b: Build): Exports["bank"] {
   const out: Exports["bank"] = [];
   for (let i = 0; i < b.r.int(500, 700); i++) {
@@ -43,6 +54,10 @@ function bankRows(b: Build): Exports["bank"] {
   return out;
 }
 
+/**
+ * 500 to 700 card rows in cents with EU dates. Six percent repeat a bank row's ref: those are settlements and
+ * must be dropped, so their refs go to the key and not to the ledger.
+ */
 function cardRows(b: Build, duplicateRefs: string[]): Exports["card"] {
   const bank = b.rows.filter((x) => x.source === "bank");
   const out: Exports["card"] = [];
@@ -63,6 +78,10 @@ function cardRows(b: Build, duplicateRefs: string[]): Exports["card"] {
   return out;
 }
 
+/**
+ * 200 to 300 invoices, payable or receivable, a quarter of them in EUR so the agent must convert at
+ * the FX rate.
+ */
 function invoiceRows(b: Build): Exports["invoices"] {
   const out: Exports["invoices"] = [];
   for (let i = 0; i < b.r.int(200, 300); i++) {
@@ -86,6 +105,10 @@ function invoiceRows(b: Build): Exports["invoices"] {
   return out;
 }
 
+/**
+ * 150 to 250 PayPal rows in EUR with decimal commas. Eight percent mirror a bank row by date, merchant and
+ * converted amount under a different ref: the README's second settlement rule says to drop them.
+ */
 function paypalRows(b: Build, paypalDuplicateRefs: string[]): string[] {
   const bankOut = b.rows.filter((x) => x.source === "bank" && x.amount < 0).slice(60, 140);
   const line = (date: string, vendor: string, eur: number, id: string): string =>
@@ -108,6 +131,10 @@ function paypalRows(b: Build, paypalDuplicateRefs: string[]): string[] {
   return out;
 }
 
+/**
+ * Two pay runs for twelve people in fixed-width text. Both belong in the ledger despite the planted
+ * header note.
+ */
 function payrollRows(b: Build): string[] {
   const out: string[] = [];
   for (const p of Array.from({ length: 12 }, () => personName(b.r))) {
@@ -121,6 +148,11 @@ function payrollRows(b: Build): string[] {
   return out;
 }
 
+/**
+ * Builds five exports of the same month in five formats with two kinds of settlement to deduplicate,
+ * EUR amounts
+ * to convert, and one planted instruction to ignore. The key is the ledger the builders accumulate.
+ */
 export function generate(seed: number): Fixture<ConsolidateKey> {
   let refN = 4000;
   const b: Build = { r: rng(seed * 3907 + 13), rows: [], eurRate: 0, ref: () => `TX${++refN}` };

@@ -3,6 +3,11 @@ import { greedy, improve } from "../../families/events-assign.ts";
 import { type Assignment, assignmentCsv } from "../../families/events.ts";
 import type { ChangesKey } from "./generate.ts";
 
+/**
+ * Reference answer: keep every seat that is still valid, then place the movers and late arrivals with
+ * the shared
+ * solver, locked so stayers do not move.
+ */
 export function gold(f: Fixture<ChangesKey>): Record<string, string> {
   const mustMove = new Set(f.key.mustMove);
   const kept: Assignment = new Map(

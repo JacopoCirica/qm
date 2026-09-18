@@ -14,6 +14,12 @@ import {
   worldFiles,
 } from "../../families/events.ts";
 
+/**
+ * Answer key: yesterday's assignment, the world after every change, who withdrew, which sessions were
+ * cancelled
+ * (including the one announced in the follow-up), the company merger, the seats that must move under the
+ * published rule, and the reference top-two rate.
+ */
 export interface ChangesKey {
   before: Record<string, string>;
   finalWorld: World;
@@ -25,6 +31,15 @@ export interface ChangesKey {
   baselineTop2: number;
 }
 
+/**
+ * Builds yesterday's assignment for 5,000 to 7,000 attendees, then an overnight change list: two cancelled
+ * sessions, a few hundred withdrawals, two rooms that shrank, late registrations, and room upgrades to
+ * keep the
+ * day feasible. The follow-up adds a third cancellation and a company merger that changes the cap. Who
+ * must move
+ * is computed by the rule written into changes.md (lowest-ranked preference leaves first, lowest id stays on
+ * ties), so a minimal-churn answer is well defined.
+ */
 export function generate(seed: number): Fixture<ChangesKey> {
   const r = rng(seed * 4423 + 12);
   const world = buildWorld(r, r.int(5000, 7000));

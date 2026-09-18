@@ -2,6 +2,11 @@ import { type BenchTask, defineTask } from "../../core/types.ts";
 import { type CommitmentsKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
+/**
+ * Commitments: the agent extracts dated promises from an office-hours transcript, then applies a
+ * second-turn correction and works out which are still open against a completed list.
+ * Tests relative dates, restated dates, excluding a third party's promise, and the follow-up turn.
+ */
 export function task(): BenchTask {
   return defineTask<CommitmentsKey>({
     id: "office-hours-commitments",

@@ -2,6 +2,11 @@ import { type BenchTask, defineTask } from "../../core/types.ts";
 import { type ChangesKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
+/**
+ * Re-plan yesterday's breakout assignments after overnight changes, moving only the people who must
+ * move, then
+ * apply a second round of changes from the follow-up.
+ */
 export function task(): BenchTask {
   return defineTask<ChangesKey>({
     id: "events-handle-scheduling-changes",

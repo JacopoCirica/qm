@@ -2,6 +2,11 @@ import { type BenchTask, defineTask } from "../../core/types.ts";
 import { type IntroKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
+/**
+ * Draft double opt-in intro emails to several people under the firm's intro policy, skipping anyone on
+ * the do-
+ * not-contact list.
+ */
 export function task(): BenchTask {
   return defineTask<IntroKey>({
     id: "network-draft-intro",

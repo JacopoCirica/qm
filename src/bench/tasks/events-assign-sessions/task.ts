@@ -2,6 +2,10 @@ import { type BenchTask, defineTask } from "../../core/types.ts";
 import { type AssignKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
+/**
+ * Assign roughly ten thousand attendees to breakout sessions under capacity and per-company caps, seating
+ * speakers first and honouring registration changes, while maximising top-two preferences.
+ */
 export function task(): BenchTask {
   return defineTask<AssignKey>({
     id: "events-assign-sessions",

@@ -1,6 +1,10 @@
 import type { Fixture } from "../../core/types.ts";
 import type { CrisisKey } from "./generate.ts";
 
+/**
+ * Reference brief built straight from the key: corrected runway, newest-note MRR (or null plus
+ * both paths when the case plants a conflict), every matching precedent, and generic next steps.
+ */
 export function gold(f: Fixture<CrisisKey>): Record<string, string> {
   const k = f.key;
   return {

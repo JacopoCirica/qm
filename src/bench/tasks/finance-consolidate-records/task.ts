@@ -2,6 +2,11 @@ import { type BenchTask, defineTask } from "../../core/types.ts";
 import { type ConsolidateKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
+/**
+ * Consolidate five differently formatted finance exports into one ledger, applying the README's
+ * conversion and
+ * settlement rules and nothing else.
+ */
 export function task(): BenchTask {
   return defineTask<ConsolidateKey>({
     id: "finance-consolidate-records",

@@ -1,9 +1,17 @@
+/**
+ * A founder ask (how the request phrases it), the expertise phrases directory records use for it, and
+ * the cues an intro email must mention.
+ */
 interface Topic {
   ask: string;
   phrases: string[];
   cues: string[];
 }
 
+/**
+ * Topics shared by the peer search and intro drafting tasks. The phrases differ from the ask on
+ * purpose so keyword matching on the request text misses.
+ */
 export const TOPICS: Topic[] = [
   {
     ask: "moving to usage-based pricing",

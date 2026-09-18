@@ -1,6 +1,10 @@
 import type { Fixture } from "../../core/types.ts";
 import type { IntroKey } from "./generate.ts";
 
+/**
+ * Reference answer from the key: a skipped entry for each blocked target and a short compliant email for the
+ * rest.
+ */
 export function gold(f: Fixture<IntroKey>): Record<string, string> {
   const k = f.key;
   return {

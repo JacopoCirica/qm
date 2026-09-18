@@ -1,6 +1,7 @@
 import type { Fixture } from "../../core/types.ts";
 import type { ExceptionsKey } from "./generate.ts";
 
+/** Reference answer: the three inferred thresholds and the expected id|rule pairs as objects. */
 export function gold(f: Fixture<ExceptionsKey>): Record<string, string> {
   const k = f.key;
   return {

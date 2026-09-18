@@ -1,6 +1,9 @@
 import type { Fixture } from "../../core/types.ts";
 import type { BriefKey } from "./generate.ts";
 
+/**
+ * Reference brief serialised from the key's final slots.
+ */
 export function gold(f: Fixture<BriefKey>): Record<string, string> {
   return {
     "output/brief.json": JSON.stringify({

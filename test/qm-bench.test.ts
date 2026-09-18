@@ -7,7 +7,13 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+/**
+ * The bench's contract: sixteen tasks in eight families, fixtures deterministic per seed, the gold
+ * answer scores 1.0, empty or missing deliverables score 0, restricted content zeroes an attempt, and
+ * cases survive a round trip through a dataset directory.
+ */
 const tasks = allTasks();
+/** Three of the six variants; all 96 run by hand through scripts/gold checks. */
 const seeds = [1, 2, 3];
 
 test("taxonomy has two tasks in each of the eight families", () => {

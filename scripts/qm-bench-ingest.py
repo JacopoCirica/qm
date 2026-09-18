@@ -46,6 +46,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 @chz.chz
 class Config:
+    """CLI options. run_dir is a qm-bench run directory; dry_run prints the payloads without posting."""
     run_dir: str = ""
     api_base: str = "https://api-test.trainloop.ai"
     dry_run: bool = True
@@ -54,6 +55,7 @@ class Config:
 
 
 def group_payload(family: str) -> dict[str, object]:
+    """One eval group per workflow family, so the platform rolls scores up by family."""
     return {
         "slug": family,
         "display_name": FAMILY_DISPLAY[family],
@@ -64,6 +66,7 @@ def group_payload(family: str) -> dict[str, object]:
 
 
 def task_payload(slug: str, row: dict[str, object]) -> dict[str, object]:
+    """One platform eval per bench task, carrying the prompt, the workflow definition from the taxonomy, and the verifier's check ids as grading criteria."""
     outputs = row["outputs"]
     checks = row["checks"]
     if not isinstance(outputs, list) or not isinstance(checks, list):
@@ -94,6 +97,7 @@ def task_payload(slug: str, row: dict[str, object]) -> dict[str, object]:
 def run_payload(
     slug: str, row: dict[str, object], summary: dict[str, object], run_dir: Path, cfg: Config
 ) -> dict[str, object]:
+    """One run per task per push. Graded cases become cases[] with per-check scores; a task whose every case failed to execute posts as a failed run with score 0 rather than disappearing."""
     bench_cases = row["cases"]
     if not isinstance(bench_cases, list):
         raise TypeError(f"{slug}: summary.json cases must be a list")
@@ -146,6 +150,7 @@ def run_payload(
 
 
 def main(cfg: Config) -> None:
+    """Reads summary.json and the per-case records, builds the group, eval and run posts in dependency order, prints them, and posts them unless dry_run."""
     run_dir = Path(cfg.run_dir)
     if not (run_dir / "summary.json").exists():
         raise SystemExit(
