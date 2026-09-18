@@ -37,7 +37,7 @@ const runId =
   process.env.QM_BENCH_RUN_ID ?? `${new Date().toISOString().replace(/[:.]/g, "-")}-${modelId.replace(/\//g, "_")}`;
 const outDir = join(process.env.QM_BENCH_OUT ?? "runs/qm-bench", runId);
 
-/** Backoff for provider 429s, which surface either as a thrown error or as a 429 in the assistant reply. */
+/** Backoff for provider 429s, which surface as a thrown error from the turn. */
 const RATE_LIMIT_PAUSE_MS = 70_000;
 const RATE_LIMIT_RETRIES = 3;
 
@@ -145,11 +145,9 @@ async function runCase(env: Environment, benchCase: BenchCase): Promise<CaseReco
 async function runCaseWithBackoff(env: Environment, benchCase: BenchCase): Promise<CaseRecord> {
   for (let retry = 0; ; retry++) {
     try {
-      const record = await runCase(env, benchCase);
-      const rateLimited = record.messages.some((m) => m.role === "assistant" && m.content.includes("429"));
-      if (!rateLimited || retry >= RATE_LIMIT_RETRIES) return record;
+      return await runCase(env, benchCase);
     } catch (e) {
-      if (!errMessage(e).includes("429") || retry >= RATE_LIMIT_RETRIES) throw e;
+      if (!/\b429\b|rate.?limit/i.test(errMessage(e)) || retry >= RATE_LIMIT_RETRIES) throw e;
     }
     console.log(`  ${benchCase.id}: rate limited, pausing ${RATE_LIMIT_PAUSE_MS / 1000}s before retry ${retry + 1}`);
     await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_PAUSE_MS));

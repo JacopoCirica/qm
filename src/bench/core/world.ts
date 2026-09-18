@@ -33,6 +33,13 @@ export const SECTORS = list(`
 export const CITIES = ["San Francisco", "New York", "Austin", "Seattle", "Chicago", "London", "Berlin", "Toronto"];
 
 /** A random first plus last name. */
+/** A random markdown path under dir that no file in files uses yet, so a collision never drops a fixture. */
+export function randomPath(r: Rng, files: Record<string, string>, dir: string): string {
+  let path = `${dir}/${r.int(100000, 999999).toString(16)}.md`;
+  while (path in files) path = `${dir}/${r.int(100000, 999999).toString(16)}.md`;
+  return path;
+}
+
 export function personName(r: Rng): string {
   return `${r.pick(FIRST_NAMES)} ${r.pick(LAST_NAMES)}`;
 }

@@ -1,7 +1,7 @@
 import { type Rng, rng } from "../../core/rng.ts";
 import { csv, emailThread, list } from "../../core/text.ts";
 import type { Fixture } from "../../core/types.ts";
-import { COMPANY_WORDS, addDays, personName } from "../../core/world.ts";
+import { COMPANY_WORDS, addDays, personName, randomPath } from "../../core/world.ts";
 
 /**
  * One meeting on the final schedule, with the attending founder and current tracking id.
@@ -113,7 +113,7 @@ function updates(r: Rng, companies: Company[], date: string, files: Record<strin
     const dates = r.sample([1, 2, 3, 4, 5], r.chance(0.4) ? 2 : 1).map((d) => addDays(date, -d));
     for (const d of dates) {
       const t = thread(r, c, d);
-      files[`updates/${r.int(100000, 999999).toString(16)}.md`] = t.text;
+      files[randomPath(r, files, "updates")] = t.text;
       const prev = latest.get(c.name);
       if (!prev || prev.date < d) latest.set(c.name, t.latest);
     }

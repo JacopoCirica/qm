@@ -9,6 +9,7 @@ import { localContainerName, localNetworkName, localVolumeName } from "../../san
 import type { SandboxHandle } from "../../sandbox/sandbox.ts";
 import type { BenchCase } from "../dataset.ts";
 import { type Outputs } from "../core/types.ts";
+import { assertCasePath } from "../dataset.ts";
 
 /** What one agent turn came back with. */
 interface TurnOutcome {
@@ -73,6 +74,9 @@ export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Envir
     memoryStrategy: "agent-only",
     sandboxBackend: "local",
     modelId: options.modelId,
+    opencodeModel: options.modelId,
+    codexModel: options.modelId,
+    claudeModel: options.modelId,
   };
   const built = buildApp(config);
   if (options.providerBaseUrl) {
@@ -93,8 +97,12 @@ export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Envir
     { scopeId: scopeId("org", config.orgId), mountPath: "global", mode: "ro" },
     { scopeId: scopeId("personal", actorId), mountPath: "", mode: "rw" },
   ];
+  const deliverablePath = (path: string): string => {
+    if (!assertCasePath(path).startsWith("output/")) throw new Error(`deliverable outside output/: ${path}`);
+    return path;
+  };
   const outputsFor = (handle: SandboxHandle): Outputs => ({
-    read: (path) => built.sandbox.readFile(handle, path),
+    read: (path) => built.sandbox.readFile(handle, deliverablePath(path)),
     list: async () => {
       const result = await built.sandbox.run(handle, "find output -type f 2>/dev/null");
       return result.stdout
@@ -118,11 +126,11 @@ export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Envir
       const partnerScope = scopeId("personal", `${actorId}-partners`);
       await built.workspace.ensureScope(partnerScope);
       for (const [path, body] of Object.entries(benchCase.privateFiles))
-        await built.workspace.write(partnerScope, path, body);
+        await built.workspace.write(partnerScope, assertCasePath(path), body);
       const seedHandle = await built.sandbox.provision(layersFor(actorId));
       try {
         for (const [path, body] of Object.entries(benchCase.files))
-          await built.sandbox.writeFile(seedHandle, path, body);
+          await built.sandbox.writeFile(seedHandle, assertCasePath(path), body);
         await built.sandbox.teardown(seedHandle);
       } catch (error) {
         await built.sandbox.teardown(seedHandle, { destroy: true });

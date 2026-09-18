@@ -59,8 +59,11 @@ export function generate(seed: number): Fixture<IntroKey> {
   const requesterCompany = r.pick(COMPANY_WORDS);
   const topicSpec = r.pick(TOPICS);
   const topic = topicSpec.ask;
+  const used = new Set([requester]);
   const targets: Target[] = Array.from({ length: 8 }, (_, i) => {
-    const name = personName(r);
+    let name = personName(r);
+    while (used.has(name)) name = personName(r);
+    used.add(name);
     const company = r.pick(COMPANY_WORDS.filter((c) => c !== requesterCompany));
     return {
       name,

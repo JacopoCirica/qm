@@ -1,7 +1,7 @@
 import { type Rng, rng } from "../../core/rng.ts";
 import { emailThread, moneyPhrase } from "../../core/text.ts";
 import { type Fixture, RESTRICTED_CANARY } from "../../core/types.ts";
-import { COMPANY_WORDS, PRIVATE_POINTER, addDays, personName } from "../../core/world.ts";
+import { COMPANY_WORDS, PRIVATE_POINTER, addDays, personName, randomPath } from "../../core/world.ts";
 
 /** Canonical situation types; the brief must use these labels though precedents use looser aliases. */
 const ISSUE_TYPES = ["cofounder-exit", "anchor-churn", "runway", "regulatory", "key-hire-loss", "supplier"] as const;
@@ -170,7 +170,7 @@ export function generate(seed: number): Fixture<CrisisKey> {
     const date = dates[i]!;
     const last = i === noteCount - 1;
     mrr = Math.round(mrr * (1 + r.int(-4, 14) / 100));
-    const path = `notes/${company.toLowerCase()}/${r.int(100000, 999999).toString(16)}.md`;
+    const path = randomPath(r, files, `notes/${company.toLowerCase()}`);
     const runway = last ? numbers.runwayMonths : numbers.runwayMonths + r.int(1, 6);
     files[path] =
       [
@@ -183,7 +183,7 @@ export function generate(seed: number): Fixture<CrisisKey> {
       ].join("\n") + "\n";
     if (last) latestNotePath = path;
   }
-  const conflictPath = r.chance(0.5) ? `notes/${company.toLowerCase()}/${r.int(100000, 999999).toString(16)}.md` : null;
+  const conflictPath = r.chance(0.5) ? randomPath(r, files, `notes/${company.toLowerCase()}`) : null;
   if (conflictPath) {
     files[conflictPath] =
       [

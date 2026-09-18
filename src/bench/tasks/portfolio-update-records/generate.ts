@@ -1,7 +1,7 @@
 import { type Rng, rng } from "../../core/rng.ts";
 import { csv, emailThread, moneyPhrase, numberWords } from "../../core/text.ts";
 import { type Fixture } from "../../core/types.ts";
-import { COMPANY_WORDS, SECTORS, addDays, personName } from "../../core/world.ts";
+import { COMPANY_WORDS, SECTORS, addDays, personName, randomPath } from "../../core/world.ts";
 import { companyNames, slugify } from "../../families/portfolio.ts";
 
 /**
@@ -89,6 +89,7 @@ export function generate(seed: number): Fixture<UpdateKey> {
     const from = `${founder} <${founder.split(" ")[0]!.toLowerCase()}@${domains.get(row.slug)!}>`;
     const threads = r.chance(0.3) ? 2 : 1;
     let latest = "";
+    let newest: { mrr?: number; head?: number } = {};
     const usedDates = new Set<string>();
     for (let t = 0; t < threads; t++) {
       const date = freshDate(r, usedDates);
@@ -129,21 +130,26 @@ export function generate(seed: number): Fixture<UpdateKey> {
           body: `Correction, ${mrrText}. Everything else stands.`,
         });
       }
-      files[`updates/${r.int(100000, 999999).toString(16)}.md`] = emailThread(mails);
+      files[randomPath(r, files, "updates")] = emailThread(mails);
       const effective = mails[mails.length - 1]!.date;
       usedDates.add(effective);
       if (effective > latest) {
         latest = effective;
-        const target = expected.find((c) => c.slug === row.slug)!;
-        if (newMrr !== undefined)
-          target.mrr_usd = inEur ? Math.round((Math.round((newMrr / eurRate) * 100) / 100) * eurRate) : newMrr;
-        if (newHead !== undefined) target.headcount = newHead;
-        target.last_update = effective;
+        newest = {
+          ...(newMrr === undefined
+            ? {}
+            : { mrr: inEur ? Math.round((Math.round((newMrr / eurRate) * 100) / 100) * eurRate) : newMrr }),
+          ...(newHead === undefined ? {} : { head: newHead }),
+        };
       }
     }
+    const target = expected.find((c) => c.slug === row.slug)!;
+    if (newest.mrr !== undefined) target.mrr_usd = newest.mrr;
+    if (newest.head !== undefined) target.headcount = newest.head;
+    target.last_update = latest;
   }
   for (let i = 0; i < 8; i++) {
-    files[`updates/${r.int(100000, 999999).toString(16)}.md`] = emailThread([
+    files[randomPath(r, files, "updates")] = emailThread([
       {
         from: `${personName(r)} <hello@${r.pick(COMPANY_WORDS).toLowerCase()}-notaportfolio.example>`,
         date: addDays("2026-09-01", r.int(0, 25)),

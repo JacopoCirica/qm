@@ -33,8 +33,10 @@ const OTHER = list(`
 
 /** Identity across files: surname plus company, lower-cased, as the README tells the agent. */
 export function personKey(name: string, company: string): string {
-  const last = name.replace(/,/g, "").trim().split(/\s+/).pop()!.toLowerCase();
-  return `${last}|${company.toLowerCase().replace(/\s+/g, "")}`;
+  const trimmed = name.trim();
+  const comma = trimmed.indexOf(",");
+  const last = comma >= 0 ? trimmed.slice(0, comma).trim() : trimmed.split(/\s+/).pop()!;
+  return `${last.toLowerCase()}|${company.toLowerCase().replace(/\s+/g, "")}`;
 }
 
 /** Half the time returns the requester's own value, so an update can make someone eligible. */

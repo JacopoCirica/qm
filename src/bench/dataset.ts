@@ -39,10 +39,18 @@ export function buildCases(tasks: BenchTask[], variants: number[]): BenchCase[] 
   );
 }
 
+/** Rejects a case path that could leave its root: absolute, backslashes, or a .. segment. */
+export function assertCasePath(path: string): string {
+  const parts = path.split("/");
+  if (path.startsWith("/") || path.includes("\\") || parts.some((p) => p === "" || p === "." || p === ".."))
+    throw new Error(`unsafe case path: ${path}`);
+  return path;
+}
+
 /** Writes a path-to-body map under a root directory. */
 function writeTree(root: string, files: Record<string, string>): void {
   for (const [path, body] of Object.entries(files)) {
-    const full = join(root, path);
+    const full = join(root, assertCasePath(path));
     mkdirSync(dirname(full), { recursive: true });
     writeFileSync(full, body);
   }
@@ -87,6 +95,8 @@ export function loadCases(dir: string): BenchCase[] {
         "files" | "privateFiles"
       >;
       if (meta.id !== name) throw new Error(`case directory ${name} holds case ${meta.id}`);
+      for (const path of meta.outputs)
+        if (!assertCasePath(path).startsWith("output/")) throw new Error(`deliverable outside output/: ${path}`);
       return { ...meta, files: readTree(join(root, "files")), privateFiles: readTree(join(root, "private")) };
     });
 }
