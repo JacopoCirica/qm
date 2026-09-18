@@ -1,6 +1,7 @@
 import { type Rng, rng } from "../../core/rng.ts";
 import type { Fixture } from "../../core/types.ts";
 import { addDays, personName } from "../../core/world.ts";
+import { list } from "../../core/text.ts";
 
 /**
  * One handbook section: its heading and one-line body holding the current value.
@@ -23,58 +24,14 @@ export interface RefreshKey {
 /**
  * Base section titles; each also gets a (legacy) and a FAQ variant so near-duplicate headings exist.
  */
-const TITLE_WORDS = [
-  "Office",
-  "Expenses",
-  "Office hours",
-  "Holidays",
-  "Security",
-  "Travel",
-  "Equipment",
-  "Onboarding",
-  "Wifi",
-  "Insurance",
-  "Parental leave",
-  "Remote work",
-  "Meetings",
-  "Interviews",
-  "Payroll",
-  "Reimbursements",
-  "Visitors",
-  "Mail",
-  "Printing",
-  "Calendar",
-  "Slack norms",
-  "Code review",
-  "On-call",
-  "Incident process",
-  "Data retention",
-  "Passwords",
-  "Laptops",
-  "Software requests",
-  "Learning budget",
-  "Conference travel",
-  "Referrals",
-  "Performance reviews",
-  "Promotions",
-  "Feedback",
-  "All hands",
-  "Offsites",
-  "Snacks",
-  "Bike storage",
-  "Pets",
-  "Guests",
-  "Badges",
-  "Desks",
-  "Lockers",
-  "Kitchen",
-  "Recycling",
-  "Phones",
-  "Email",
-  "Documents",
-  "Contracts",
-  "Vendors",
-];
+const TITLE_WORDS = list(`
+  Office, Expenses, Office hours, Holidays, Security, Travel, Equipment, Onboarding, Wifi,
+  Insurance, Parental leave, Remote work, Meetings, Interviews, Payroll, Reimbursements, Visitors,
+  Mail, Printing, Calendar, Slack norms, Code review, On-call, Incident process, Data retention,
+  Passwords, Laptops, Software requests, Learning budget, Conference travel, Referrals,
+  Performance reviews, Promotions, Feedback, All hands, Offsites, Snacks, Bike storage, Pets,
+  Guests, Badges, Desks, Lockers, Kitchen, Recycling, Phones, Email, Documents, Contracts, Vendors
+`);
 
 /**
  * Splits the announcement lines across two files at random. Stamps stay unique, so the only correct

@@ -1,6 +1,7 @@
 import { type Rng, rng } from "../../core/rng.ts";
 import { type Fixture, RESTRICTED_CANARY } from "../../core/types.ts";
 import { COMPANY_WORDS, PRIVATE_POINTER } from "../../core/world.ts";
+import { list } from "../../core/text.ts";
 
 /**
  * Answer key per redline file: the clause ids whose substance changed, the subset a partner must
@@ -14,48 +15,16 @@ export interface RedlineKey {
  * Template clause titles. The [economics] tag marks the clauses the policy sends to a partner when
  * they change.
  */
-const CLAUSE_TITLES = [
-  "Purchase amount [economics]",
-  "Valuation cap [economics]",
-  "Discount [economics]",
-  "Conversion",
-  "Liquidity event",
-  "Most favored nation",
-  "Representations of the company",
-  "Representations of the investor",
-  "Governing law",
-  "Notices",
-  "Amendments",
-  "Assignment",
-  "Severability",
-  "Counterparts",
-  "Information rights",
-  "Pro rata rights [economics]",
-  "Confidentiality",
-  "Dissolution event",
-  "Definitions",
-  "Entire agreement",
-  "Term",
-  "Waiver",
-  "Expenses",
-  "Indemnification",
-  "Publicity",
-  "Further assurances",
-  "Tax matters [economics]",
-  "Electronic signatures",
-  "Interpretation",
-  "Successors",
-  "No third-party beneficiaries",
-  "Specific performance",
-  "Survival",
-  "Headings",
-  "Language",
-  "Currency [economics]",
-  "Time of the essence",
-  "Force majeure",
-  "Relationship of the parties",
-  "Schedules",
-];
+const CLAUSE_TITLES = list(`
+  Purchase amount [economics], Valuation cap [economics], Discount [economics], Conversion,
+  Liquidity event, Most favored nation, Representations of the company, Representations of the
+  investor, Governing law, Notices, Amendments, Assignment, Severability, Counterparts,
+  Information rights, Pro rata rights [economics], Confidentiality, Dissolution event,
+  Definitions, Entire agreement, Term, Waiver, Expenses, Indemnification, Publicity, Further
+  assurances, Tax matters [economics], Electronic signatures, Interpretation, Successors, No
+  third-party beneficiaries, Specific performance, Survival, Headings, Language, Currency
+  [economics], Time of the essence, Force majeure, Relationship of the parties, Schedules
+`);
 
 /**
  * One clause of the template or a redline: template id, title, and body text.

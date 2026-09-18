@@ -1,6 +1,7 @@
 import { type Rng, rng } from "../../core/rng.ts";
 import type { Fixture } from "../../core/types.ts";
 import { addDays, personName } from "../../core/world.ts";
+import { list } from "../../core/text.ts";
 
 /**
  * One promise: who, what, and the ISO due date.
@@ -27,20 +28,12 @@ export interface CommitmentsKey {
 /**
  * Pool of things a founder or partner can promise to do.
  */
-const COMMITMENT_TASKS = [
-  "send the updated deck",
-  "make the intro to the bank",
-  "share the hiring plan",
-  "ship the self-serve tier",
-  "review the pricing page",
-  "send the security questionnaire",
-  "book the customer call",
-  "draft the board update",
-  "close the SOC 2 vendor",
-  "post the engineering job",
-  "send the cap table",
-  "schedule the offsite",
-];
+const COMMITMENT_TASKS = list(`
+  send the updated deck, make the intro to the bank, share the hiring plan, ship the self-serve
+  tier, review the pricing page, send the security questionnaire, book the customer call, draft
+  the board update, close the SOC 2 vendor, post the engineering job, send the cap table, schedule
+  the offsite
+`);
 
 /**
  * Suffix for a day of month, used when a date is spoken as 'by the 14th'.

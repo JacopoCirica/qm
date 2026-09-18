@@ -1,5 +1,5 @@
 import type { Rng } from "../core/rng.ts";
-import { csv, parseCsv } from "../core/text.ts";
+import { csv, list, parseCsv } from "../core/text.ts";
 import { COMPANY_WORDS, personName } from "../core/world.ts";
 
 /** The three breakout time slots of the event day. */
@@ -36,32 +36,14 @@ export interface World {
 }
 
 /** Session titles, 24 of them, spread round-robin over the three slots. */
-const TITLES = [
-  "Pricing and packaging",
-  "Enterprise sales",
-  "Hiring your first ten",
-  "Fundraising",
-  "Infrastructure costs",
-  "Founder mental health",
-  "Design partners",
-  "Compliance early",
-  "Developer marketing",
-  "Cofounder dynamics",
-  "Board management",
-  "Churn analysis",
-  "Outbound that works",
-  "Hardware supply chains",
-  "Regulated markets",
-  "Community led growth",
-  "Support at scale",
-  "International expansion",
-  "Payments and billing",
-  "Data rooms",
-  "Security posture",
-  "Open source business",
-  "Consumer retention",
-  "Agents in production",
-];
+const TITLES = list(`
+  Pricing and packaging, Enterprise sales, Hiring your first ten, Fundraising, Infrastructure
+  costs, Founder mental health, Design partners, Compliance early, Developer marketing, Cofounder
+  dynamics, Board management, Churn analysis, Outbound that works, Hardware supply chains,
+  Regulated markets, Community led growth, Support at scale, International expansion, Payments and
+  billing, Data rooms, Security posture, Open source business, Consumer retention, Agents in
+  production
+`);
 
 /**
  * Generates an event of the given size, then scales each slot's capacities to about 108% of that

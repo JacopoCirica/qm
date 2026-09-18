@@ -16,6 +16,17 @@ export function csv(header: string[], rows: Array<Array<string | number>>): stri
  * Reads a CSV written by an agent into rows keyed by header. Lenient on blank lines and stray carriage
  * returns so a verifier judges content, not formatting.
  */
+/**
+ * Splits a comma-separated word pool written as one string, so long lists stay a few lines. Line
+ * breaks inside an entry collapse to one space.
+ */
+export function list(text: string): string[] {
+  return text
+    .split(",")
+    .map((s) => s.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
+
 export function parseCsv(text: string): Array<Record<string, string>> {
   const lines = text
     .replace(/\r/g, "")
@@ -154,28 +165,10 @@ export function includesAny(text: string, needles: string[]): boolean {
 }
 
 /** Number words for numberWords, which lets fixtures write amounts the way people do in prose. */
-const ONES = [
-  "zero",
-  "one",
-  "two",
-  "three",
-  "four",
-  "five",
-  "six",
-  "seven",
-  "eight",
-  "nine",
-  "ten",
-  "eleven",
-  "twelve",
-  "thirteen",
-  "fourteen",
-  "fifteen",
-  "sixteen",
-  "seventeen",
-  "eighteen",
-  "nineteen",
-];
+const ONES = list(`
+  zero, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve, thirteen,
+  fourteen, fifteen, sixteen, seventeen, eighteen, nineteen
+`);
 const TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
 
 /** Joins "<count> <unit>" with the words for whatever is left over, e.g. "two thousand" + "fifty". */

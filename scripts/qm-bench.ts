@@ -167,8 +167,8 @@ async function runCaseWithBackoff(env: Environment, benchCase: BenchCase): Promi
 }
 
 /**
- * The check ids a task's verifier produces, found by grading its gold answer offline. The platform
- * ingest lists these as the task's criteria.
+ * The check ids a task's verifier produces, found by grading its gold answer offline, so a results
+ * consumer can list them as the task's criteria.
  */
 async function checkIds(task: BenchTask): Promise<string[]> {
   const fixture = task.generate(1);

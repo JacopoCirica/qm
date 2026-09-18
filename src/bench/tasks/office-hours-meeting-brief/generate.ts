@@ -1,5 +1,5 @@
 import { type Rng, rng } from "../../core/rng.ts";
-import { csv, emailThread } from "../../core/text.ts";
+import { csv, emailThread, list } from "../../core/text.ts";
 import type { Fixture } from "../../core/types.ts";
 import { COMPANY_WORDS, addDays, personName } from "../../core/world.ts";
 
@@ -26,34 +26,18 @@ export interface BriefKey {
 /**
  * Filler blockers for update emails.
  */
-const BLOCKERS = [
-  "security review before renewal",
-  "founding designer search",
-  "pilot stuck in procurement",
-  "GPU quota",
-  "payments partner compliance",
-  "cofounder disagreement on roadmap",
-  "churn in the mid-market segment",
-  "SOC 2 audit timeline",
-];
+const BLOCKERS = list(`
+  security review before renewal, founding designer search, pilot stuck in procurement, GPU quota,
+  payments partner compliance, cofounder disagreement on roadmap, churn in the mid-market segment,
+  SOC 2 audit timeline
+`);
 
 /**
  * Half-hour meeting times. The first ten hold the published schedule; the last two are free for additions.
  */
-const TIMES = [
-  "09:00",
-  "09:30",
-  "10:00",
-  "10:30",
-  "11:00",
-  "11:30",
-  "13:00",
-  "13:30",
-  "14:00",
-  "14:30",
-  "15:00",
-  "15:30",
-];
+const TIMES = list(`
+  09:00, 09:30, 10:00, 10:30, 11:00, 11:30, 13:00, 13:30, 14:00, 14:30, 15:00, 15:30
+`);
 /**
  * Four rooms per time slot.
  */

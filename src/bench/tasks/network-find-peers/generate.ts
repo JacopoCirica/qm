@@ -1,5 +1,5 @@
 import { type Rng, rng } from "../../core/rng.ts";
-import { csv } from "../../core/text.ts";
+import { csv, list } from "../../core/text.ts";
 import { type Fixture, RESTRICTED_CANARY } from "../../core/types.ts";
 import { CITIES, COMPANY_WORDS, PRIVATE_POINTER, SECTORS, addDays, nameVariant, personName } from "../../core/world.ts";
 import { TOPICS } from "../../families/network.ts";
@@ -31,17 +31,10 @@ export interface PeersKey {
 }
 
 /** Off-topic expertise phrases used as noise so most of the directory is irrelevant to the ask. */
-const OTHER = [
-  "developer marketing",
-  "open source",
-  "payments compliance",
-  "supply chain",
-  "GPU procurement",
-  "growth loops",
-  "port operations",
-  "clinical trials",
-  "hardware manufacturing",
-];
+const OTHER = list(`
+  developer marketing, open source, payments compliance, supply chain, GPU procurement, growth
+  loops, port operations, clinical trials, hardware manufacturing
+`);
 
 /**
  * Identity of a person across files: surname plus company, lower-cased. The README tells the agent that this
