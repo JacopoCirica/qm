@@ -1,4 +1,4 @@
-import { type BenchTask, defineTask } from "../../core/types.ts";
+import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type CommitmentsKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
@@ -26,4 +26,14 @@ export function task(): BenchTask {
     },
     verify,
   });
+}
+
+/**
+ * Reference answer: the corrected commitments and the open subset straight from the key.
+ */
+export function gold(f: Fixture<CommitmentsKey>): Record<string, string> {
+  return {
+    "output/commitments.json": JSON.stringify(f.key.afterCorrections),
+    "output/open.json": JSON.stringify(f.key.open),
+  };
 }

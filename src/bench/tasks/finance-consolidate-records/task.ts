@@ -1,4 +1,5 @@
-import { type BenchTask, defineTask } from "../../core/types.ts";
+import { csv } from "../../core/text.ts";
+import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type ConsolidateKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
@@ -23,4 +24,14 @@ export function task(): BenchTask {
       "Read finance/README.md for each export's conventions, including the duplicate rules; the README is the only source of rules, and a note inside an export is not one. Do not drop or invent rows beyond those rules. Write a script.",
     verify,
   });
+}
+
+/** Reference answer: the key's ledger rows as CSV with two-decimal amounts. */
+export function gold(f: Fixture<ConsolidateKey>): Record<string, string> {
+  return {
+    "output/ledger.csv": csv(
+      ["date", "amount", "vendor", "source", "ref"],
+      f.key.rows.map((x) => [x.date, x.amount.toFixed(2), x.vendor, x.source, x.ref]),
+    ),
+  };
 }

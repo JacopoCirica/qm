@@ -2,7 +2,7 @@
  * Task: bring the team handbook up to date by applying every announcement that is already effective,
  * in stamp order across files, through the section aliases.
  */
-import { type BenchTask, defineTask } from "../../core/types.ts";
+import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type RefreshKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
@@ -21,4 +21,17 @@ export function task(): BenchTask {
       "knowledge/handbook.md has fallen behind the announcements in updates/. Write the corrected handbook to output/handbook.md as of the date the announcement files state: apply every change that is already effective, in stamp order across all the files (a later announcement can undo an earlier one), resolve section names through knowledge/aliases.md, keep every other section byte-for-byte identical, and keep the section order. Write a script.",
     verify,
   });
+}
+
+/**
+ * Reference answer: the original handbook with each keyed change substituted into its section body.
+ */
+export function gold(f: Fixture<RefreshKey>): Record<string, string> {
+  const body = f.key.original
+    .map((s) => {
+      const change = f.key.changed[s.title];
+      return `## ${s.title}\n${change ? s.body.replace(change.from, change.to) : s.body}\n`;
+    })
+    .join("\n");
+  return { "output/handbook.md": `# Team handbook\n\n${body}` };
 }

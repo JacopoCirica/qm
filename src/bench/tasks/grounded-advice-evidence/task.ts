@@ -1,4 +1,4 @@
-import { type BenchTask, defineTask } from "../../core/types.ts";
+import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type AdviceKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
@@ -24,4 +24,23 @@ export function task(): BenchTask {
       'Write output/advice.json with keys: latest_mrr (number), mom_growth_pct (number, one decimal), implied_arr (number), runway_months (number), recommendation ("bridge", "priced_round" or "cut_burn"), runway_threshold_months (number, the inferred cutoff), growth_threshold_pct (number, the inferred cutoff), sources (array of file paths).',
     verify,
   });
+}
+
+/**
+ * Reference answer copied from the key with the standard sources list.
+ */
+export function gold(f: Fixture<AdviceKey>): Record<string, string> {
+  const k = f.key;
+  return {
+    "output/advice.json": JSON.stringify({
+      latest_mrr: k.latestMrr,
+      mom_growth_pct: k.growthPct,
+      implied_arr: k.impliedArr,
+      runway_months: k.runwayMonths,
+      recommendation: k.recommendation,
+      runway_threshold_months: k.runwayThreshold,
+      growth_threshold_pct: k.growthThreshold,
+      sources: ["metrics/metrics.csv", "memos/README.md", "inbox/question.md"],
+    }),
+  };
 }

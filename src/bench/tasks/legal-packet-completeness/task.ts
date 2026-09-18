@@ -2,7 +2,7 @@
  * Task: check every closing packet against the checklist and report which required documents are
  * missing, using the exported round type plus the changes made since.
  */
-import { type BenchTask, defineTask } from "../../core/types.ts";
+import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type PacketKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
@@ -21,4 +21,13 @@ export function task(): BenchTask {
       'Check every packet under legal/packets/ against legal/checklist.md, using legal/companies.csv for each packet\'s round type as exported and legal/round-changes.md for the round types that changed since. Write output/completeness.json as a JSON object keyed by packet directory name, each value {"complete": true|false, "missing": [canonical document names from the checklist that are absent]}. Write a script.',
     verify,
   });
+}
+
+/**
+ * Reference answer: each packet's missing list straight from the key, complete when nothing is missing.
+ */
+export function gold(f: Fixture<PacketKey>): Record<string, string> {
+  const out: Record<string, { complete: boolean; missing: string[] }> = {};
+  for (const [c, missing] of Object.entries(f.key.missing)) out[c] = { complete: missing.length === 0, missing };
+  return { "output/completeness.json": JSON.stringify(out) };
 }

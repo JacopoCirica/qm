@@ -1,4 +1,4 @@
-import { type BenchTask, defineTask } from "../../core/types.ts";
+import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type ExceptionsKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
@@ -22,4 +22,19 @@ export function task(): BenchTask {
       'Work out the expense rules from audit/reviewed.csv (read audit/README.md), then review finance/expenses.csv against them. Write output/exceptions.json as {"rules": {"meal_limit_per_attendee": n, "receipt_required_above": n, "travel_approval_above": n}, "exceptions": [{"id", "rule"}, ...]} using the rule codes from the audit. An expense that breaks two rules appears twice; expenses that break nothing must not appear. Write a script.',
     verify,
   });
+}
+
+/** Reference answer: the three inferred thresholds and the expected id|rule pairs as objects. */
+export function gold(f: Fixture<ExceptionsKey>): Record<string, string> {
+  const k = f.key;
+  return {
+    "output/exceptions.json": JSON.stringify({
+      rules: {
+        meal_limit_per_attendee: k.mealLimit,
+        receipt_required_above: k.receiptFloor,
+        travel_approval_above: k.travelFloor,
+      },
+      exceptions: k.expected.map((e) => ({ id: e.split("|")[0], rule: e.split("|")[1] })),
+    }),
+  };
 }

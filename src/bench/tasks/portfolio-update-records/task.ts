@@ -1,5 +1,6 @@
-import { type BenchTask, defineTask } from "../../core/types.ts";
-import { type UpdateKey, generate } from "./generate.ts";
+import { csv } from "../../core/text.ts";
+import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
+import { type CompanyRow, type UpdateKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
 /**
@@ -24,4 +25,16 @@ export function task(): BenchTask {
       "Update mrr_usd and headcount only where the founder's final word in a thread states a new value; set last_update to the date of that final message; when a company has two threads the newer wins. Senders whose domain is not in portfolio/domains.csv are not portfolio companies. Leave every other cell exactly as it was. Write a script.",
     verify,
   });
+}
+
+/**
+ * Reference CSV serialised from the key's expected rows.
+ */
+export function gold(f: Fixture<UpdateKey>): Record<string, string> {
+  return {
+    "output/companies.csv": csv(
+      f.key.header,
+      f.key.expected.map((c) => f.key.header.map((h) => c[h as keyof CompanyRow])),
+    ),
+  };
 }
