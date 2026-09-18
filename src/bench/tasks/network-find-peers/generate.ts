@@ -94,10 +94,16 @@ export function generate(seed: number): Fixture<PeersKey> {
   const sector = r.pick(SECTORS);
   const city = r.pick(CITIES);
   const people: Person[] = [];
+  const seen = new Set<string>();
   for (let i = 0; i < 1800; i++) {
     const onTopic = r.chance(0.08);
-    const name = personName(r);
-    const company = `${r.pick(COMPANY_WORDS)}${i % 9 === 0 ? " Labs" : ""}`;
+    let name = personName(r);
+    let company = `${r.pick(COMPANY_WORDS)}${i % 9 === 0 ? " Labs" : ""}`;
+    while (seen.has(personKey(name, company))) {
+      name = personName(r);
+      company = `${r.pick(COMPANY_WORDS)}${i % 9 === 0 ? " Labs" : ""}`;
+    }
+    seen.add(personKey(name, company));
     people.push({
       name,
       email: `${name.split(" ")[0]!.toLowerCase()}.${i}@${company.toLowerCase().replace(/\s+/g, "")}.example`,

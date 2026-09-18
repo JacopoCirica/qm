@@ -18,10 +18,13 @@ export async function verify(outputs: Outputs, key: BriefKey): Promise<Check[]> 
   return [
     {
       id: "schedule-after-changes",
-      score: f1(
-        key.finalSlots.map((s) => s.company),
-        slots.map((s) => str(s.company)),
-      ),
+      score:
+        slots.length === key.finalSlots.length && by.size === slots.length
+          ? f1(
+              key.finalSlots.map((s) => s.company),
+              slots.map((s) => str(s.company)),
+            )
+          : 0,
     },
     {
       id: "removed-left-out",
