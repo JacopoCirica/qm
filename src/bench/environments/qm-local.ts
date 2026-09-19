@@ -67,8 +67,11 @@ export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Envir
     ...loadConfig(),
     port: 0,
     dataDir,
-    sessionStore: "memory",
+    databaseUrl: undefined,
     runStore: "memory",
+    sessionStore: "memory",
+    snapshotStore: "local",
+    transferStore: "local",
     harness: options.harness,
     securityPosture: "dangerous",
     memoryStrategy: "agent-only",
@@ -124,16 +127,20 @@ export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Envir
       const actorId = `qm-bench-${benchCase.id}-${runId}-${Date.now().toString(36)}`;
       const sessionIds: string[] = [];
       const partnerScope = scopeId("personal", `${actorId}-partners`);
-      await built.workspace.ensureScope(partnerScope);
-      for (const [path, body] of Object.entries(benchCase.privateFiles))
-        await built.workspace.write(partnerScope, assertCasePath(path), body);
-      const seedHandle = await built.sandbox.provision(layersFor(actorId));
       try {
-        for (const [path, body] of Object.entries(benchCase.files))
-          await built.sandbox.writeFile(seedHandle, assertCasePath(path), body);
-        await built.sandbox.teardown(seedHandle);
+        await built.workspace.ensureScope(partnerScope);
+        for (const [path, body] of Object.entries(benchCase.privateFiles))
+          await built.workspace.write(partnerScope, assertCasePath(path), body);
+        const seedHandle = await built.sandbox.provision(layersFor(actorId));
+        try {
+          for (const [path, body] of Object.entries(benchCase.files))
+            await built.sandbox.writeFile(seedHandle, assertCasePath(path), body);
+          await built.sandbox.teardown(seedHandle);
+        } catch (error) {
+          await built.sandbox.teardown(seedHandle, { destroy: true });
+          throw error;
+        }
       } catch (error) {
-        await built.sandbox.teardown(seedHandle, { destroy: true });
         removeDockerResources(actorId);
         throw error;
       }

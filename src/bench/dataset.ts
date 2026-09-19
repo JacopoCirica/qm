@@ -95,6 +95,8 @@ export function loadCases(dir: string): BenchCase[] {
         "files" | "privateFiles"
       >;
       if (meta.id !== name) throw new Error(`case directory ${name} holds case ${meta.id}`);
+      for (const id of [meta.id, meta.task])
+        if (!/^[A-Za-z0-9._-]+$/.test(id) || id === "." || id === "..") throw new Error(`unsafe identifier: ${id}`);
       for (const path of meta.outputs)
         if (!assertCasePath(path).startsWith("output/")) throw new Error(`deliverable outside output/: ${path}`);
       return { ...meta, files: readTree(join(root, "files")), privateFiles: readTree(join(root, "private")) };
