@@ -34,7 +34,8 @@ const variants = (process.env.QM_BENCH_CASES ?? "1,2")
   .map((s) => Number(s.trim()))
   .filter((n) => Number.isInteger(n) && n > 0);
 const runId =
-  process.env.QM_BENCH_RUN_ID ?? `${new Date().toISOString().replace(/[:.]/g, "-")}-${modelId.replace(/\//g, "_")}`;
+  process.env.QM_BENCH_RUN_ID ??
+  `${new Date().toISOString().replace(/[:.]/g, "-")}-${modelId.replace(/[^A-Za-z0-9._-]/g, "_")}`;
 if (!/^[A-Za-z0-9._-]+$/.test(runId)) {
   console.error(
     `QM_BENCH_RUN_ID must be a single path segment of letters, digits, dot, dash or underscore; got ${runId}`,
