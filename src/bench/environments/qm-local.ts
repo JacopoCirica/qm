@@ -37,6 +37,8 @@ export interface QmLocalOptions {
   modelId: string;
   providerBaseUrl?: string;
   providerKey?: string;
+  contextWindow?: number;
+  maxTokens?: number;
 }
 
 /** Wraps a prompt as a direct message from the case's actor, the way a Slack DM would arrive. */
@@ -89,7 +91,13 @@ export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Envir
         name: "Benchmark provider",
         protocol: "openai",
         baseUrl: options.providerBaseUrl,
-        models: [{ id: options.modelId, contextWindow: 200000, maxTokens: 16000 }],
+        models: [
+          {
+            id: options.modelId,
+            contextWindow: options.contextWindow ?? 200000,
+            maxTokens: options.maxTokens ?? 16000,
+          },
+        ],
       },
       options.providerKey,
       "qm-bench",

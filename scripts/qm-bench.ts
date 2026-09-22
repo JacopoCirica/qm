@@ -18,6 +18,22 @@ if (!modelId) {
 const benchModel: string = modelId;
 const providerBaseUrl = process.env.QM_BENCH_PROVIDER_BASE_URL;
 const providerKey = process.env.QM_BENCH_PROVIDER_KEY;
+/** Context window and output cap declared for the custom provider; set them to the served model's real limits. */
+const providerContextWindow = process.env.QM_BENCH_PROVIDER_CONTEXT_WINDOW
+  ? Number(process.env.QM_BENCH_PROVIDER_CONTEXT_WINDOW)
+  : undefined;
+const providerMaxTokens = process.env.QM_BENCH_PROVIDER_MAX_TOKENS
+  ? Number(process.env.QM_BENCH_PROVIDER_MAX_TOKENS)
+  : undefined;
+for (const [name, value] of [
+  ["QM_BENCH_PROVIDER_CONTEXT_WINDOW", providerContextWindow],
+  ["QM_BENCH_PROVIDER_MAX_TOKENS", providerMaxTokens],
+] as const) {
+  if (value !== undefined && !(Number.isInteger(value) && value > 0)) {
+    console.error(`${name} must be a positive integer, got ${process.env[name]}`);
+    process.exit(1);
+  }
+}
 const harness = process.env.QM_BENCH_HARNESS ?? "pi";
 if (!["mock", "pi", "opencode", "codex", "claude"].includes(harness)) {
   console.error(`QM_BENCH_HARNESS must be one of mock, pi, opencode, codex, claude; got ${harness}`);
@@ -173,7 +189,14 @@ function mean(ns: number[]): number | null {
   return ns.length === 0 ? null : Math.round((ns.reduce((s, n) => s + n, 0) / ns.length) * 10000) / 10000;
 }
 
-const env = await qmLocalEnvironment({ harness: benchHarness, modelId: benchModel, providerBaseUrl, providerKey });
+const env = await qmLocalEnvironment({
+  harness: benchHarness,
+  modelId: benchModel,
+  providerBaseUrl,
+  providerKey,
+  ...(providerContextWindow !== undefined ? { contextWindow: providerContextWindow } : {}),
+  ...(providerMaxTokens !== undefined ? { maxTokens: providerMaxTokens } : {}),
+});
 mkdirSync(outDir, { recursive: true });
 console.log(
   `qm-bench ${runId}: ${cases.length} cases from ${datasetDir ?? "generators"}, harness ${harness}, model ${modelId}${providerBaseUrl ? ` via ${providerBaseUrl}` : ""}`,
