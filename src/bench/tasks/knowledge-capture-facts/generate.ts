@@ -50,7 +50,7 @@ function durableFacts(r: Rng): Fact[] {
       lines: [`Correction on the office: it is floor ${floor}, not floor ${staleFloor}.`],
       gold: `The new office is on floor ${floor}.`,
     },
-    { token: tool, lines: [`Expenses move to ${tool} starting Monday.`], gold: `Expenses are submitted in ${tool}.` },
+    { token: tool, lines: [`Expenses move to ${tool} from next week.`], gold: `Expenses are submitted in ${tool}.` },
     {
       token: day,
       stale: staleDay,

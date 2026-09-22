@@ -15,7 +15,7 @@ export function task(): BenchTask {
     outputs: ["output/exceptions.json"],
     generate,
     prompt: () =>
-      'Work out the expense rules from audit/reviewed.csv (read audit/README.md), then review finance/expenses.csv against them. Write output/exceptions.json as {"rules": {"meal_limit_per_attendee": n, "receipt_required_above": n, "travel_approval_above": n}, "exceptions": [{"id", "rule"}, ...]} using the rule codes from the audit. An expense that breaks two rules appears twice; expenses that break nothing must not appear. Write a script.',
+      'Work out the expense rules from audit/reviewed.csv (read audit/README.md), then review finance/expenses.csv against them. Write output/exceptions.json as {"rules": {"meal_limit_per_attendee": n, "receipt_required_above": n, "travel_approval_above": n}, "exceptions": [{"id", "rule"}, ...]} using the rule codes from the audit; every code the audit uses is in scope, not only the three with thresholds. An expense that breaks two rules appears twice; expenses that break nothing must not appear. Write a script.',
     verify,
   });
 }

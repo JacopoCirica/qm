@@ -27,6 +27,12 @@ function accounting(n: number): string {
   return n < 0 ? `(${abs})` : abs;
 }
 
+/** EUR to USD in integer cents with half-cents rounded up, so the key never depends on floating-point luck. */
+export function eurToUsd(eur: number, rate: number): number {
+  const product = Math.round(eur * 100) * Math.round(rate * 100);
+  return Math.floor((product + 50) / 100) / 100;
+}
+
 /** Random amount between lo and hi dollars with cent precision. */
 function cents(r: Rng, lo: number, hi: number): number {
   return r.int(lo * 100, hi * 100) / 100;
@@ -55,8 +61,8 @@ function exportFiles(e: Exports): Record<string, string> {
       [
         "Bank amounts use accounting format: parentheses mean money out.",
         "Card rows are always money out, in cents. A card row whose ref also appears in the bank export is the bank settlement of that card charge; keep the bank row and drop the card row.",
-        "Invoices carry a currency; a EUR total converts at finance/fx.csv, rounded to cents. Payable is money out, receivable is money in.",
-        "PayPal is semicolon separated with a decimal comma, in EUR; convert at finance/fx.csv and round to cents. Always money out. A PayPal row whose date, merchant and converted amount (within two cents) match a bank row is the bank settlement of that PayPal charge; keep the bank row and drop the PayPal row.",
+        "Invoices carry a currency; a EUR total converts at finance/fx.csv, rounded to cents with half-cents rounded up. Payable is money out, receivable is money in.",
+        "PayPal is semicolon separated with a decimal comma, in EUR; convert at finance/fx.csv and round to cents with half-cents rounded up. Always money out. A PayPal row whose date, merchant and converted amount (within two cents) match a bank row is the bank settlement of that PayPal charge; keep the bank row and drop the PayPal row.",
         "Payroll is fixed width, gross salary, always money out. Vendor is 'Payroll <employee>'.",
       ].join("\n") + "\n",
   };
@@ -135,7 +141,7 @@ function invoiceRows(b: Build): Exports["invoices"] {
     const date = augustDate(b.r);
     const eur = b.r.chance(0.25);
     const total = cents(b.r, 200, 15000);
-    const usd = eur ? Math.round(total * b.eurRate * 100) / 100 : total;
+    const usd = eur ? eurToUsd(total, b.eurRate) : total;
     const payable = b.r.chance(0.7);
     const vendor = payable ? b.r.pick(VENDORS) : `${b.r.pick(COMPANY_WORDS)} Inc`;
     const id = b.ref();
@@ -169,7 +175,7 @@ function paypalRows(b: Build, paypalDuplicateRefs: string[]): string[] {
     const date = augustDate(b.r);
     const eur = cents(b.r, 10, 900);
     const vendor = b.r.pick(VENDORS);
-    b.rows.push({ date, amount: -Math.round(eur * b.eurRate * 100) / 100, vendor, source: "paypal", ref: id });
+    b.rows.push({ date, amount: -eurToUsd(eur, b.eurRate), vendor, source: "paypal", ref: id });
     out.push(line(date, vendor, eur, id));
   }
   return out;

@@ -1,5 +1,5 @@
 import { type Rng, rng } from "../../core/rng.ts";
-import { csv, emailThread, moneyPhrase, numberWords } from "../../core/text.ts";
+import { csv, emailThread, moneyPhrase, numberWords, statedMoney } from "../../core/text.ts";
 import { type Fixture } from "../../core/types.ts";
 import { COMPANY_WORDS, SECTORS, addDays, personName, randomPath } from "../../core/world.ts";
 import { companyNames, slugify } from "../../families/portfolio.ts";
@@ -29,11 +29,20 @@ export interface UpdateKey {
  */
 const HEADER = ["slug", "name", "sector", "mrr_usd", "headcount", "last_update"];
 
-/** How the founder states MRR: words or figures, sometimes in EUR to convert at the fx rate. */
-function mrrPhrase(r: Rng, newMrr: number | undefined, inEur: boolean, eurRate: number): string {
-  if (newMrr === undefined) return "";
-  if (inEur) return `€${(Math.round((newMrr / eurRate) * 100) / 100).toLocaleString("en-US")} MRR`;
-  return `MRR ${moneyPhrase(r, newMrr)}`;
+/** How the founder states MRR, with the dollar value that statement carries; EUR converts at the fx rate. */
+function mrrPhrase(
+  r: Rng,
+  newMrr: number | undefined,
+  inEur: boolean,
+  eurRate: number,
+): { text: string; value?: number } {
+  if (newMrr === undefined) return { text: "" };
+  if (inEur) {
+    const eur = Math.round((newMrr / eurRate) * 100) / 100;
+    return { text: `€${eur.toLocaleString("en-US")} MRR`, value: Math.round(eur * eurRate) };
+  }
+  const stated = statedMoney(r, newMrr);
+  return { text: `MRR ${stated.text}`, value: stated.value };
 }
 
 /** A thread date two or more days from the company's others, so the newer thread is clear. */
@@ -96,7 +105,8 @@ export function generate(seed: number): Fixture<UpdateKey> {
       const newMrr = r.chance(0.8) ? Math.round(row.mrr_usd * (1 + r.int(-10, 40) / 100)) : undefined;
       const newHead = r.chance(0.7) ? Math.max(1, row.headcount + r.int(-2, 6)) : undefined;
       const inEur = newMrr !== undefined && r.chance(0.25);
-      const mrrText = mrrPhrase(r, newMrr, inEur, eurRate);
+      const stated = mrrPhrase(r, newMrr, inEur, eurRate);
+      const mrrText = stated.text;
       const headText =
         newHead === undefined
           ? ""
@@ -136,9 +146,7 @@ export function generate(seed: number): Fixture<UpdateKey> {
       if (effective > latest) {
         latest = effective;
         newest = {
-          ...(newMrr === undefined
-            ? {}
-            : { mrr: inEur ? Math.round((Math.round((newMrr / eurRate) * 100) / 100) * eurRate) : newMrr }),
+          ...(stated.value === undefined ? {} : { mrr: stated.value }),
           ...(newHead === undefined ? {} : { head: newHead }),
         };
       }
@@ -146,7 +154,7 @@ export function generate(seed: number): Fixture<UpdateKey> {
     const target = expected.find((c) => c.slug === row.slug)!;
     if (newest.mrr !== undefined) target.mrr_usd = newest.mrr;
     if (newest.head !== undefined) target.headcount = newest.head;
-    target.last_update = latest;
+    if (newest.mrr !== undefined || newest.head !== undefined) target.last_update = latest;
   }
   for (let i = 0; i < 8; i++) {
     files[randomPath(r, files, "updates")] = emailThread([

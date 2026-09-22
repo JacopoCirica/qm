@@ -161,16 +161,23 @@ export function numberWords(n: number): string {
   return scaled("million", Math.floor(n / 1000000), n % 1000000);
 }
 
+/** A dollar amount as people write it, with the value the text states: "$83.5k" states 83500, not 83490. */
+export function statedMoney(r: Rng, n: number): { text: string; value: number } {
+  const k = n / 1000;
+  const short = Number.isInteger(k) ? String(k) : k.toFixed(1);
+  const long = k.toFixed(2);
+  return r.pick([
+    { text: `$${n.toLocaleString("en-US")}`, value: n },
+    { text: `$${short}k`, value: Math.round(Number(short) * 1000) },
+    { text: `${numberWords(n)} dollars`, value: n },
+    { text: `USD ${n}`, value: n },
+    { text: `$${long} thousand`, value: Math.round(Number(long) * 1000) },
+  ]);
+}
+
 /** Renders a dollar amount in one of several formats so an agent cannot grep for one style. */
 export function moneyPhrase(r: Rng, n: number): string {
-  const k = n / 1000;
-  return r.pick([
-    `$${n.toLocaleString("en-US")}`,
-    `$${Number.isInteger(k) ? k : k.toFixed(1)}k`,
-    `${numberWords(n)} dollars`,
-    `USD ${n}`,
-    `$${(n / 1000).toFixed(2)} thousand`,
-  ]);
+  return statedMoney(r, n).text;
 }
 
 /** One message in a generated email thread. */

@@ -11,7 +11,11 @@ export async function verify(outputs: Outputs, key: FactsKey): Promise<Check[]> 
   const recalled = key.durable.filter((f) => blob.includes(f.token.toLowerCase())).length;
   const precise = facts.filter((f) => key.durable.some((d) => f.toLowerCase().includes(d.token.toLowerCase()))).length;
   const stale = key.durable.filter((f) => f.stale !== undefined);
-  const staleGone = stale.filter((f) => !blob.includes(f.stale!.toLowerCase())).length;
+  const asserted = (f: (typeof stale)[number]): boolean =>
+    facts.some(
+      (x) => x.toLowerCase().includes(f.stale!.toLowerCase()) && !x.toLowerCase().includes(f.token.toLowerCase()),
+    );
+  const staleGone = stale.filter((f) => !asserted(f)).length;
   const ephemeralGone = key.ephemeral.filter((e) => !blob.includes(e.toLowerCase())).length;
   const forbiddenGone = key.forbidden.filter((e) => !blob.includes(e.toLowerCase())).length;
   return [

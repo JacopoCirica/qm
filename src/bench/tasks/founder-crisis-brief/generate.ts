@@ -1,5 +1,5 @@
 import { type Rng, rng } from "../../core/rng.ts";
-import { emailThread, moneyPhrase } from "../../core/text.ts";
+import { emailThread, moneyPhrase, statedMoney } from "../../core/text.ts";
 import { type Fixture, RESTRICTED_CANARY } from "../../core/types.ts";
 import { COMPANY_WORDS, PRIVATE_POINTER, addDays, personName, randomPath } from "../../core/world.ts";
 
@@ -163,6 +163,7 @@ export function generate(seed: number): Fixture<CrisisKey> {
   files["notes/summary.md"] =
     `# ${company} summary (partner-maintained, last touched 2026-02)\n\nMRR ${moneyPhrase(r, summaryMrr)}. Runway ${summaryRunway} months. Team of ${r.int(3, 8)}.\n`;
   let mrr = r.int(12, 40) * 1000;
+  let latestMrr = mrr;
   let latestNotePath = "";
   const noteCount = r.int(18, 24);
   const dates = Array.from({ length: noteCount }, (_, i) => addDays("2024-09-01", i * 30 + r.int(0, 6))).sort();
@@ -172,12 +173,14 @@ export function generate(seed: number): Fixture<CrisisKey> {
     mrr = Math.round(mrr * (1 + r.int(-4, 14) / 100));
     const path = randomPath(r, files, `notes/${company.toLowerCase()}`);
     const runway = last ? numbers.runwayMonths : numbers.runwayMonths + r.int(1, 6);
+    const stated = statedMoney(r, mrr);
+    if (last) latestMrr = stated.value;
     files[path] =
       [
         "# Check-in",
         `Date: ${date}`,
         `Company: ${company}`,
-        `MRR ${moneyPhrase(r, mrr)}.`,
+        `MRR ${stated.text}.`,
         runwayPhrase(r, runway),
         `Team: ${r.int(3, 12)} people. ${r.pick(["Hiring plan reviewed.", "Pricing discussion.", "Roadmap disagreement noted.", "Pipeline healthy.", "Board update drafted."])}`,
       ].join("\n") + "\n";
@@ -218,7 +221,7 @@ export function generate(seed: number): Fixture<CrisisKey> {
       precedents,
       latestNotePath,
       conflictPath,
-      latestMrr: mrr,
+      latestMrr,
       summaryMrr,
       summaryRunway,
     },
