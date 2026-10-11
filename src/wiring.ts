@@ -1,3 +1,4 @@
+import { createDecisionBackend, type DecisionBackend } from "./decisions/decisions.ts";
 import type { SlackSessionStatusState } from "./slack/session-status.ts";
 import { availableRuntimeError } from "./api/runtime-config.ts";
 import { createApprovalStore } from "./core/approval-store.ts";
@@ -101,6 +102,8 @@ import {
   type PersistedBrowseMaxSteps,
   type PersistedBrowseModel,
   type PersistedAutoFlaggerConfig,
+  type PersistedDecisionRules,
+  type PersistedDecisionProviders,
   type PersistedTurnWallClock,
   type PersistedDeploymentIdentity,
 } from "./resolution/config-store.ts";
@@ -566,6 +569,7 @@ export function buildApp(
   config: Config,
   overrides: {
     securityScreener?: SecurityScreener;
+    decisionBackend?: DecisionBackend;
     credentialBrokers?: Record<string, AwsRoleBroker>;
     modelCredentialFetch?: typeof fetch;
     modelVerificationProbe?: typeof probeModel;
@@ -687,6 +691,8 @@ export function buildApp(
     browseMaxSteps: artifactMap<PersistedBrowseMaxSteps>("browse_max_steps_configs"),
     browseModels: artifactMap<PersistedBrowseModel>("browse_model_configs"),
     autoFlaggerConfigs: artifactMap<PersistedAutoFlaggerConfig>("auto_flagger_configs"),
+    decisionRules: artifactMap<PersistedDecisionRules>("decision_rules"),
+    decisionProviders: artifactMap<PersistedDecisionProviders>("decision_providers"),
     turnWallClocks: artifactMap<PersistedTurnWallClock>("turn_wall_clock_configs"),
     deploymentIdentity: artifactMap<PersistedDeploymentIdentity>("deployment_identity"),
     defaultSecurityPosture: config.securityPosture,
@@ -1978,6 +1984,15 @@ export function buildApp(
     turnLeaseWaitMs: config.turnLeaseWaitMs,
     securityScreenTimeoutMs: config.securityScreenTimeoutMs,
     ...(securityScreener ? { securityScreener } : {}),
+    decisionBackend:
+      overrides.decisionBackend ??
+      createDecisionBackend({
+        providers: () => configStore.getDecisionProviders(),
+        env: { ...config.decisionKeys, MODEL_GATEWAY_API_KEY: config.modelGateway?.apiKey },
+        ...(config.modelGateway
+          ? { gatewayUrl: config.modelGateway.url, gatewayKeyHeader: config.modelGateway.apiKeyHeader }
+          : {}),
+      }),
     backgroundJobTtlMs: config.backgroundJobTtlMs,
     backgroundJobTtlMaxMs: config.backgroundJobTtlMaxMs,
     sandboxCapabilityTtlMs: config.sandboxCapabilityTtlMs,

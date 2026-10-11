@@ -1,3 +1,4 @@
+import type { DecisionBackend } from "../../decisions/decisions.ts";
 import type { ExternalSlackPolicies } from "../../resolution/external-slack.ts";
 import type { RuntimeService } from "../../harness/runtime-types.ts";
 import type { SandboxResources } from "../../sandbox/sandbox-resources.ts";
@@ -141,6 +142,8 @@ export interface OrchestratorDeps {
   turnLeaseWaitMs?: number;
   securityScreenTimeoutMs?: number;
   securityScreener?: SecurityScreener;
+  /** Runs admin-configured decision rules; see src/decisions. */
+  decisionBackend?: DecisionBackend;
   backgroundJobTtlMs?: number;
   sandboxCapabilityTtlMs?: number;
   backgroundJobTtlMaxMs?: number;

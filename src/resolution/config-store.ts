@@ -1,3 +1,4 @@
+import type { DecisionProvider, DecisionRule } from "../decisions/decisions.ts";
 import type { CommandPolicy, EgressPolicy, ScopeId } from "../types.ts";
 import { scopeId } from "../types.ts";
 import { defaultOrgPolicy } from "../policy/command-policy.ts";
@@ -146,6 +147,14 @@ interface AutoFlaggerConfig {
 export interface PersistedAutoFlaggerConfig extends AutoFlaggerConfig {
   scopeId: ScopeId;
 }
+export interface PersistedDecisionProviders {
+  scopeId: ScopeId;
+  providers: DecisionProvider[];
+}
+export interface PersistedDecisionRules {
+  scopeId: ScopeId;
+  rules: DecisionRule[];
+}
 export interface PersistedTurnWallClock {
   scopeId: ScopeId;
   sec: number;
@@ -262,6 +271,10 @@ export interface ScopedConfigStore {
   getBrowseModel(id: ScopeId): string | null;
   setBrowseModel(id: ScopeId, modelId: string | null): void;
   getAutoFlaggerConfig(): AutoFlaggerConfig | null;
+  getDecisionRules(): readonly DecisionRule[];
+  getDecisionProviders(): readonly DecisionProvider[];
+  setDecisionProviders(providers: DecisionProvider[]): void;
+  setDecisionRules(rules: DecisionRule[]): void;
   setAutoFlaggerConfig(config: AutoFlaggerConfig | null): void;
   getTurnWallClockSecDurable(id: ScopeId): Promise<number | null>;
   setTurnWallClockSec(id: ScopeId, sec: number | null): Promise<void>;
@@ -303,6 +316,8 @@ export function createMemoryConfigStore(
     browseMaxSteps?: DurableMap<PersistedBrowseMaxSteps>;
     browseModels?: DurableMap<PersistedBrowseModel>;
     autoFlaggerConfigs?: DurableMap<PersistedAutoFlaggerConfig>;
+    decisionRules?: DurableMap<PersistedDecisionRules>;
+    decisionProviders?: DurableMap<PersistedDecisionProviders>;
     turnWallClocks?: DurableMap<PersistedTurnWallClock>;
     deploymentIdentity?: DurableMap<PersistedDeploymentIdentity>;
     connectorSecretKey?: Buffer | string;
@@ -334,6 +349,8 @@ export function createMemoryConfigStore(
   const browseMaxSteps = new Map<ScopeId, number>();
   const browseModels = new Map<ScopeId, string>();
   let autoFlaggerConfig: AutoFlaggerConfig | null = null;
+  let decisionRules: DecisionRule[] = [];
+  let decisionProviders: DecisionProvider[] = [];
   const turnWallClocks = new Map<ScopeId, number>();
   const soulStore = opts.souls ?? createMemoryMap<PersistedSoul>();
   const soulHistoryStore = opts.soulHistory ?? createMemoryMap<PersistedSoulRevision>();
@@ -360,6 +377,8 @@ export function createMemoryConfigStore(
   const browseMaxStepsStore = opts.browseMaxSteps ?? createMemoryMap<PersistedBrowseMaxSteps>();
   const browseModelStore = opts.browseModels ?? createMemoryMap<PersistedBrowseModel>();
   const autoFlaggerStore = opts.autoFlaggerConfigs ?? createMemoryMap<PersistedAutoFlaggerConfig>();
+  const decisionRulesStore = opts.decisionRules ?? createMemoryMap<PersistedDecisionRules>();
+  const decisionProvidersStore = opts.decisionProviders ?? createMemoryMap<PersistedDecisionProviders>();
   const turnWallClockStore = opts.turnWallClocks ?? createMemoryMap<PersistedTurnWallClock>();
   const deploymentIdentity = opts.deploymentIdentity ?? createMemoryMap<PersistedDeploymentIdentity>();
   const persistWarn = (what: string) => reportFailureAs(`config: persist ${what}`, undefined);
@@ -575,6 +594,8 @@ export function createMemoryConfigStore(
                 rubric: storedAutoFlagger.rubric,
               }
             : null;
+          decisionRules = (await decisionRulesStore.get(org))?.rules ?? [];
+          decisionProviders = (await decisionProvidersStore.get(org))?.providers ?? [];
           for (const r of await turnWallClockStore.all()) turnWallClocks.set(r.scopeId, r.sec);
         })();
       }
@@ -1117,6 +1138,22 @@ export function createMemoryConfigStore(
         );
       }
     },
+    getDecisionProviders: () => decisionProviders,
+    setDecisionProviders(providers) {
+      decisionProviders = providers;
+      persist(`decisionProviders:${org}`, "decision providers", () =>
+        providers.length
+          ? decisionProvidersStore.put(org, { scopeId: org, providers })
+          : decisionProvidersStore.delete(org),
+      );
+    },
+    getDecisionRules: () => decisionRules,
+    setDecisionRules(rules) {
+      decisionRules = rules;
+      persist(`decisionRules:${org}`, "decision rules", () =>
+        rules.length ? decisionRulesStore.put(org, { scopeId: org, rules }) : decisionRulesStore.delete(org),
+      );
+    },
     getTurnWallClockSecDurable: async (id) => (await turnWallClockStore.get(id))?.sec ?? null,
     async setTurnWallClockSec(id, sec) {
       await writeQueue(`turnWallClock:${id}`, () =>
@@ -1216,6 +1253,8 @@ export function createMemoryConfigStore(
         channelHeaderPinRow,
         autoFlaggerRow,
         internalOverridesRow,
+        decisionRulesRow,
+        decisionProvidersRow,
       ] = await Promise.all([
         soulStore.get(id),
         commandPolicyStore.get(id),
@@ -1234,6 +1273,8 @@ export function createMemoryConfigStore(
         channelHeaderPinStore.get(id),
         id === org ? autoFlaggerStore.get(org) : null,
         id === org ? internalMemberOverridesStore.get(org) : null,
+        id === org ? decisionRulesStore.get(org) : null,
+        id === org ? decisionProvidersStore.get(org) : null,
       ]);
       let refreshedSoul = soul;
       const legacyHistory = legacySoulHistory.get(id) ?? [];
@@ -1280,6 +1321,8 @@ export function createMemoryConfigStore(
         autoFlaggerConfig = autoFlaggerRow
           ? { harnessId: autoFlaggerRow.harnessId, modelId: autoFlaggerRow.modelId, rubric: autoFlaggerRow.rubric }
           : null;
+      if (id === org) decisionRules = decisionRulesRow?.rules ?? [];
+      if (id === org) decisionProviders = decisionProvidersRow?.providers ?? [];
       if (brandingRow) branding.set(id, brandingRow.branding);
       else branding.delete(id);
       if (channelHeaderPinRow) channelHeaderPin.set(id, channelHeaderPinRow.on);
@@ -1304,6 +1347,8 @@ export function createMemoryConfigStore(
               `interactiveFastMode:${org}`,
               `individualModelAuth:${org}`,
               `autoFlagger:${org}`,
+              `decisionRules:${org}`,
+              `decisionProviders:${org}`,
             ]
           : []),
         `channelHeaderPin:${id}`,

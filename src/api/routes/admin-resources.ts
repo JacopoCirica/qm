@@ -1,3 +1,4 @@
+import { parseDecisionProviders, parseDecisionRules } from "../../decisions/decisions.ts";
 import { parseAckEmoji } from "../../slack/config.ts";
 import { orgId as configOrgId } from "../../config.ts";
 import type { ServerDeps } from "../deps.ts";
@@ -204,6 +205,52 @@ export const ADMIN_RESOURCES: readonly AdminResource[] = [
       const parsed = await parseAutoFlaggerDraft(ctx.deps, ctx.body as Record<string, unknown>);
       if ("error" in parsed) return parsed;
       ctx.deps.config!.setAutoFlaggerConfig(parsed.value);
+      return { ok: true };
+    },
+  },
+  {
+    id: "decision-providers",
+    kind: "custom",
+    target: "org",
+    clearable: true,
+    label:
+      "Endpoints that answer decision rules' questions: a LiteLLM gateway (openai_decisions/ and typesafe/ models), OpenAI's Decisions API, or TypeSafe. Keys come from the named deployment env var, never from this setting.",
+    readKey: "decisionProviders",
+    get: (deps) => deps.config!.getDecisionProviders(),
+    apply: async (ctx, _actor, scope) => {
+      const bad = orgOnly(scope, "decision providers are org-wide");
+      if (bad) return bad;
+      const body = ctx.body as { reset?: unknown; providers?: unknown };
+      const parsed = body.reset === true ? { providers: [] } : parseDecisionProviders(body.providers);
+      if ("error" in parsed) return parsed;
+      const inUse = ctx.deps
+        .config!.getDecisionRules()
+        .find((r) => !parsed.providers.some((p) => p.id === r.model.provider));
+      if (inUse) return { error: `decision rule ${inUse.id} still uses provider ${inUse.model.provider}` };
+      ctx.deps.config!.setDecisionProviders(parsed.providers);
+      return { ok: true };
+    },
+  },
+  {
+    id: "decision-rules",
+    kind: "custom",
+    target: "org",
+    clearable: true,
+    label:
+      "Classifiers attached to harness hooks. Each rule asks a question about the hook's input, picks one of its options with its configured decision provider and model, and applies that option's action.",
+    readKey: "decisionRules",
+    get: (deps) => deps.config!.getDecisionRules(),
+    apply: async (ctx, _actor, scope) => {
+      const bad = orgOnly(scope, "decision rules are org-wide");
+      if (bad) return bad;
+      const body = ctx.body as { reset?: unknown; rules?: unknown };
+      if (body.reset === true) {
+        ctx.deps.config!.setDecisionRules([]);
+        return { ok: true };
+      }
+      const parsed = parseDecisionRules(body.rules, ctx.deps.config!.getDecisionProviders());
+      if ("error" in parsed) return parsed;
+      ctx.deps.config!.setDecisionRules(parsed.rules);
       return { ok: true };
     },
   },
