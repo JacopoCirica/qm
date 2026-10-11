@@ -30,10 +30,11 @@ const injection = (over: Partial<DecisionRule> = {}): DecisionRule => ({
   ...over,
 });
 
-const fixed = (p: Record<string, number> | Error): DecisionBackend => ({
-  async choose() {
+const fixed = (p: Record<string, number> | Error, calls: string[][] = []): DecisionBackend => ({
+  async choose({ questions }) {
+    calls.push(Object.keys(questions));
     if (p instanceof Error) throw p;
-    return p;
+    return Object.fromEntries(Object.keys(questions).map((k) => [k, p]));
   },
 });
 
@@ -100,7 +101,38 @@ test("runHook: highest-probability option decides; observe rules never act; erro
 
   const failed = await runHook([injection()], "tool_response", "x", fixed(new Error("down")), signal);
   assert.equal(failed.action, "allow");
-  assert.equal(failed.results[0]?.error, "down");
+  assert.equal(failed.results[0]?.error, "Error: down");
+  const caused = new Error("fetch failed", { cause: new Error("getaddrinfo ENOTFOUND gateway") });
+  const malformed = createDecisionBackend({
+    providers: () => [{ id: "oa", kind: "openai" }],
+    env: { OPENAI_API_KEY: "k" },
+    fetch: async () =>
+      new Response(
+        JSON.stringify({
+          answers: [{ name: "injection", type: "choice", probabilities: [{ value: "yes", probability: "high" }] }],
+        }),
+      ),
+  });
+  const invalid = await runHook(
+    [injection({ model: { provider: "oa", model: "m" } })],
+    "tool_response",
+    "x",
+    malformed,
+    signal,
+  );
+  assert.match(invalid.results[0]?.error ?? "", /invalid probability for yes: "high"/);
+  const withCause = await runHook([injection()], "tool_response", "x", fixed(caused), signal);
+  assert.match(withCause.results[0]?.error ?? "", /fetch failed <- Error: getaddrinfo ENOTFOUND gateway/);
+  const calls: string[][] = [];
+  const batched = await runHook(
+    [injection(), injection({ id: "secrets" }), injection({ id: "other", model: { provider: "oa", model: "m" } })],
+    "tool_response",
+    "x",
+    fixed({ yes: 0.9, no: 0.1 }, calls),
+    signal,
+  );
+  assert.deepEqual(calls, [["injection", "secrets"], ["other"]], "rules sharing a model share one request");
+  assert.equal(batched.results.length, 3);
   const failClosed = await runHook(
     [injection({ onError: "yes" })],
     "tool_response",
@@ -112,13 +144,17 @@ test("runHook: highest-probability option decides; observe rules never act; erro
 });
 
 const ask = (backend: ReturnType<typeof createDecisionBackend>, model: { provider: string; model: string }) =>
-  backend.choose({
-    question: "q?",
-    state: "s",
-    options: { yes: "a", no: "b" },
-    model,
-    signal: new AbortController().signal,
-  });
+  backend
+    .choose({
+      questions: { decision: { question: "q?", options: { yes: "a", no: "b" } } },
+      state: "s",
+      model,
+      signal: new AbortController().signal,
+    })
+    .then(({ decision }) => {
+      if (decision instanceof Error) throw decision;
+      return decision;
+    });
 
 function capture(response: unknown) {
   const calls: { url: string; headers: Record<string, string>; body: Record<string, unknown> }[] = [];
@@ -129,17 +165,13 @@ function capture(response: unknown) {
   return { calls, fetchImpl };
 }
 
-test("providers parse and refuse arbitrary key env vars", () => {
+test("providers parse and refuse unknown kinds", () => {
   assert.ok(
     "providers" in
       parseDecisionProviders([
         { id: "gw", kind: "litellm" },
         { id: "oa", kind: "openai" },
       ]),
-  );
-  assert.match(
-    String((parseDecisionProviders([{ id: "x", kind: "openai", keyEnv: "DATABASE_URL" }]) as { error: string }).error),
-    /keyEnv/,
   );
   assert.match(String((parseDecisionProviders([{ id: "x", kind: "llama" }]) as { error: string }).error), /kind/);
 });
@@ -229,7 +261,7 @@ test("a decision rule on tool_response quarantines tool output end to end", asyn
     decisionBackend: {
       async choose({ state }) {
         states.push(state);
-        return /zebra/.test(state) ? { yes: 0.97, no: 0.03 } : { yes: 0.02, no: 0.98 };
+        return { injection: /zebra/.test(state) ? { yes: 0.97, no: 0.03 } : { yes: 0.02, no: 0.98 } };
       },
     },
   });

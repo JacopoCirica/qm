@@ -62,19 +62,12 @@ function screenSources(payload: string): string[] {
   return [...new Set(sources)].slice(0, MAX_AUDITED_SOURCES);
 }
 
-/** Decision rules bound to a screening hook. */
 function screenRules(deps: OrchestratorDeps, hook: DecisionHook) {
   return deps.decisionBackend ? (deps.config?.getDecisionRules?.() ?? []).filter((r) => r.hook === hook) : [];
 }
 
-/** True when anything can screen: the proxy, the model screener, or a decision rule. */
-export function screeningAvailable(deps: OrchestratorDeps): boolean {
-  return (
-    !!deps.securityScreener ||
-    !!deps.harness.models.screenSecurity ||
-    screenRules(deps, "user_input").length > 0 ||
-    screenRules(deps, "tool_response").length > 0
-  );
+export function screeningAvailable(deps: OrchestratorDeps, hook: DecisionHook): boolean {
+  return !!deps.securityScreener || !!deps.harness.models.screenSecurity || screenRules(deps, hook).length > 0;
 }
 
 export function createSecurityClassifier(deps: OrchestratorDeps): SecurityClassifier {

@@ -453,7 +453,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         });
         return "block";
       };
-      if (!screeningAvailable(deps)) return block("no-screener");
+      if (!screeningAvailable(deps, "user_input")) return block("no-screener");
       if (!(await deps.rateLimiter.check(actor.id)).allowed) return block("rate-limited");
       if (deps.budget && !(await deps.budget.check(actor.id)).allowed) return block("over-budget");
       if (securitySteersInFlight.has(conversation.threadRef)) return block("steer-in-flight");
@@ -876,7 +876,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         screenedOverheard = inbound.overheard;
         const { hasUnscreenableAttachment, externalPromptData, screenPayload } = inbound;
         if (screenPayload || hasUnscreenableAttachment) {
-          const canScreenText = !!screenPayload && !screenPayload.truncated && screeningAvailable(deps);
+          const canScreenText = !!screenPayload && !screenPayload.truncated && screeningAvailable(deps, "user_input");
           const verdict = canScreenText
             ? await classifySecurityData(screenPayload!.content, actor.id, scopeId, recordScreenRequest, {
                 ...screenTrace,
@@ -888,7 +888,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           let unscreenableCause: "unscreenable-attachment" | "oversize-input" | "no-screener" | undefined;
           if (hasUnscreenableAttachment || !screenPayload) unscreenableCause = "unscreenable-attachment";
           else if (screenPayload.truncated) unscreenableCause = "oversize-input";
-          else if (!screeningAvailable(deps)) unscreenableCause = "no-screener";
+          else if (!screeningAvailable(deps, "user_input")) unscreenableCause = "no-screener";
           if (verdict?.decision === "strict") {
             const sources = externalPromptData.map((item) => item.source);
             flaggedScreenedInput = {
@@ -2866,7 +2866,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
                 blobTransfer,
                 fileRegistration,
                 turnInboxDir,
-                securityPolicy.screening !== "off" && screeningAvailable(deps)
+                securityPolicy.screening !== "off" && screeningAvailable(deps, "tool_response")
                   ? ({ content }) =>
                       classifySecurityData(content, actor.id, scopeId, undefined, {
                         ...screenTrace,
@@ -3112,7 +3112,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           if (securityPolicy.screening !== "off") {
             for (const document of documentInputs.documents.slice()) {
               documentsUnscreened ||= !isTextDocument(document);
-              if (!screeningAvailable(deps)) {
+              if (!screeningAvailable(deps, "tool_response")) {
                 documentsUnscreened = true;
                 continue;
               }

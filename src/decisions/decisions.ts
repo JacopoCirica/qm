@@ -1,38 +1,15 @@
-/**
- * Decision hooks: admin-configured classifiers attached to points in the harness.
- *
- * A rule names a hook, a question, the options the classifier may pick, and the action each
- * option maps to. The classifier only chooses an option; the call site applies the action, so a
- * bad verdict can never do anything the rule did not allow.
- */
-
 const DECISION_HOOKS = ["user_input", "tool_response"] as const;
 export type DecisionHook = (typeof DECISION_HOOKS)[number];
 
-/** Ordered from least to most restrictive; when several rules fire, the most restrictive wins. */
 const DECISION_ACTIONS = ["allow", "block"] as const;
 export type DecisionAction = (typeof DECISION_ACTIONS)[number];
 
-/**
- * A decision provider is an endpoint that answers typed questions. Admins define one or more;
- * rules reference a provider by id plus a model. Keys are never stored in settings: a provider
- * names one of a fixed set of deployment env vars that holds its key.
- *  - litellm: an OpenAI-compatible gateway that serves `openai_decisions/...` and `typesafe/...`
- *    models through its native `typesafe` body (YC's LiteLLM build does).
- *  - openai: OpenAI's Decisions API (`POST /v1/decisions`).
- *  - typesafe: TypeSafe's System One API (Jev).
- */
 const DECISION_PROVIDER_KINDS = ["litellm", "openai", "typesafe"] as const;
-const DECISION_KEY_ENVS = ["MODEL_GATEWAY_API_KEY", "OPENAI_API_KEY", "TYPESAFE_API_KEY"] as const;
 
 export interface DecisionProvider {
   id: string;
   kind: (typeof DECISION_PROVIDER_KINDS)[number];
-  /** Defaults per kind; the litellm default is the deployment's model gateway. */
   baseUrl?: string;
-  keyEnv?: (typeof DECISION_KEY_ENVS)[number];
-  /** Header carrying the key; defaults to a bearer Authorization header. */
-  keyHeader?: string;
 }
 
 interface DecisionModelRef {
@@ -43,7 +20,6 @@ interface DecisionModelRef {
 interface DecisionOption {
   description: string;
   action: DecisionAction;
-  /** Reason recorded with the action. */
   message?: string;
 }
 
@@ -53,9 +29,7 @@ export interface DecisionRule {
   question: string;
   options: Record<string, DecisionOption>;
   model: DecisionModelRef;
-  /** observe = classify and audit only; enforce = the chosen action is applied. */
   mode: "observe" | "enforce";
-  /** Option applied when the classifier fails or times out. */
   onError: string;
 }
 
@@ -69,14 +43,18 @@ export interface DecisionResult {
   error?: string;
 }
 
+interface DecisionQuestion {
+  question: string;
+  options: Record<string, string>;
+}
+
 export interface DecisionBackend {
   choose(input: {
-    question: string;
+    questions: Record<string, DecisionQuestion>;
     state: string;
-    options: Record<string, string>;
     model: DecisionModelRef;
     signal: AbortSignal;
-  }): Promise<Record<string, number>>;
+  }): Promise<Record<string, Record<string, number> | Error>>;
 }
 
 const RULE_ID = /^[a-z0-9][a-z0-9._-]{0,63}$/;
@@ -85,7 +63,6 @@ const MAX_RULES = 32;
 const MAX_STATE_CHARS = 16_000;
 
 const PROVIDER_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
-const KEY_HEADER = /^[a-z][a-z0-9-]{0,63}$/i;
 
 export function parseDecisionProviders(value: unknown): { providers: DecisionProvider[] } | { error: string } {
   if (!Array.isArray(value)) return { error: "decision providers must be an array" };
@@ -109,16 +86,10 @@ export function parseDecisionProviders(value: unknown): { providers: DecisionPro
       if (url.protocol !== "https:" && url.protocol !== "http:")
         return { error: `provider ${r.id}: baseUrl must be http(s)` };
     }
-    if (r.keyEnv !== undefined && !DECISION_KEY_ENVS.includes(r.keyEnv as DecisionProvider["keyEnv"] & string))
-      return { error: `provider ${r.id}: keyEnv must be one of ${DECISION_KEY_ENVS.join(", ")}` };
-    if (r.keyHeader !== undefined && (typeof r.keyHeader !== "string" || !KEY_HEADER.test(r.keyHeader)))
-      return { error: `provider ${r.id}: keyHeader is not a header name` };
     providers.push({
       id: r.id,
       kind: r.kind as DecisionProvider["kind"],
       ...(r.baseUrl !== undefined ? { baseUrl: String(r.baseUrl) } : {}),
-      ...(r.keyEnv !== undefined ? { keyEnv: r.keyEnv as DecisionProvider["keyEnv"] } : {}),
-      ...(r.keyHeader !== undefined ? { keyHeader: r.keyHeader as string } : {}),
     });
   }
   return { providers };
@@ -181,7 +152,6 @@ export function parseDecisionRules(
   return { rules };
 }
 
-/** Pick the highest-probability option. Ties go to the more restrictive action. */
 function pick(rule: DecisionRule, probabilities: Record<string, number>): string {
   let best = rule.onError;
   let bestP = -1;
@@ -196,39 +166,61 @@ function pick(rule: DecisionRule, probabilities: Record<string, number>): string
   return best;
 }
 
-async function runDecision(
-  rule: DecisionRule,
+function errorChain(error: unknown): string {
+  const parts: string[] = [];
+  for (let e = error, depth = 0; e !== undefined && depth < 5; depth++) {
+    parts.push(e instanceof Error ? `${e.name}: ${e.message}` : String(e));
+    e = e instanceof Error ? e.cause : undefined;
+  }
+  return parts.join(" <- ").slice(0, 2_000);
+}
+
+function settle(rule: DecisionRule, answer: Record<string, number> | Error | undefined): DecisionResult {
+  let error: string | undefined;
+  if (answer instanceof Error) error = errorChain(answer);
+  else if (!answer) error = "classifier returned no answer";
+  const probabilities = answer && !(answer instanceof Error) ? answer : {};
+  const option = error ? rule.onError : pick(rule, probabilities);
+  const opt = rule.options[option]!;
+  return {
+    ruleId: rule.id,
+    option,
+    action: opt.action,
+    ...(opt.message ? { message: opt.message } : {}),
+    probabilities,
+    mode: rule.mode,
+    ...(error ? { error } : {}),
+  };
+}
+
+async function runGroup(
+  rules: readonly DecisionRule[],
   state: string,
   backend: DecisionBackend,
   signal: AbortSignal,
-): Promise<DecisionResult> {
-  const settle = (option: string, probabilities: Record<string, number>, error?: string): DecisionResult => {
-    const opt = rule.options[option]!;
-    return {
-      ruleId: rule.id,
-      option,
-      action: opt.action,
-      ...(opt.message ? { message: opt.message } : {}),
-      probabilities,
-      mode: rule.mode,
-      ...(error ? { error } : {}),
-    };
-  };
+): Promise<DecisionResult[]> {
+  let answers: Record<string, Record<string, number> | Error>;
   try {
-    const probabilities = await backend.choose({
-      question: rule.question,
+    answers = await backend.choose({
+      questions: Object.fromEntries(
+        rules.map((r) => [
+          r.id,
+          {
+            question: r.question,
+            options: Object.fromEntries(Object.entries(r.options).map(([k, o]) => [k, o.description])),
+          },
+        ]),
+      ),
       state: state.slice(0, MAX_STATE_CHARS).toWellFormed(),
-      options: Object.fromEntries(Object.entries(rule.options).map(([k, o]) => [k, o.description])),
-      model: rule.model,
+      model: rules[0]!.model,
       signal,
     });
-    return settle(pick(rule, probabilities), probabilities);
   } catch (error) {
-    return settle(rule.onError, {}, error instanceof Error ? error.message : String(error));
+    return rules.map((r) => settle(r, error instanceof Error ? error : new Error(String(error))));
   }
+  return rules.map((r) => settle(r, answers[r.id]));
 }
 
-/** Run every rule bound to a hook in parallel. Enforced results decide; observed ones are only returned. */
 export async function runHook(
   rules: readonly DecisionRule[],
   hook: DecisionHook,
@@ -236,8 +228,12 @@ export async function runHook(
   backend: DecisionBackend,
   signal: AbortSignal,
 ): Promise<{ action: DecisionAction; decisive?: DecisionResult; results: DecisionResult[] }> {
-  const bound = rules.filter((r) => r.hook === hook);
-  const results = await Promise.all(bound.map((r) => runDecision(r, state, backend, signal)));
+  const groups = new Map<string, DecisionRule[]>();
+  for (const rule of rules.filter((r) => r.hook === hook)) {
+    const key = JSON.stringify([rule.model.provider, rule.model.model]);
+    groups.set(key, [...(groups.get(key) ?? []), rule]);
+  }
+  const results = (await Promise.all([...groups.values()].map((g) => runGroup(g, state, backend, signal)))).flat();
   let decisive: DecisionResult | undefined;
   for (const result of results) {
     if (result.mode !== "enforce") continue;
@@ -247,16 +243,34 @@ export async function runHook(
   return { action: decisive?.action ?? "allow", ...(decisive ? { decisive } : {}), results };
 }
 
-function normalize(probabilities: Record<string, number>, options: Record<string, string>): Record<string, number> {
+const sample = (value: unknown) =>
+  String((typeof value === "string" ? value : JSON.stringify(value)) ?? value).slice(0, 500);
+
+function parseJson(text: string): Record<string, unknown> {
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch (error) {
+    throw new Error(`classifier returned invalid JSON: ${sample(text)}`, { cause: error });
+  }
+}
+
+function normalize(
+  probabilities: Record<string, unknown>,
+  options: Record<string, string>,
+  response: unknown,
+): Record<string, number> {
   const out: Record<string, number> = {};
   let total = 0;
   for (const key of Object.keys(options)) {
     const p = probabilities[key];
-    const v = typeof p === "number" && Number.isFinite(p) && p > 0 ? p : 0;
-    out[key] = v;
-    total += v;
+    if (p !== undefined && (typeof p !== "number" || !Number.isFinite(p) || p < 0))
+      throw new Error(
+        `classifier returned an invalid probability for ${key}: ${String(JSON.stringify(p) ?? p).slice(0, 200)}`,
+      );
+    out[key] = p ?? 0;
+    total += p ?? 0;
   }
-  if (total <= 0) throw new Error("classifier returned no usable probabilities");
+  if (total <= 0) throw new Error(`classifier returned no usable probabilities: ${sample(response)}`);
   for (const key of Object.keys(out)) out[key] = out[key]! / total;
   return out;
 }
@@ -277,20 +291,17 @@ async function postJson(
   });
   const text = await response.text();
   if (!response.ok) throw new Error(`classifier HTTP ${response.status}: ${text.slice(0, 300)}`);
-  return JSON.parse(text) as Record<string, unknown>;
+  return parseJson(text);
 }
 
-function choiceProbabilities(answer: unknown): Record<string, number> {
+function choiceProbabilities(answer: unknown): Record<string, unknown> {
   const a = (answer ?? {}) as { probabilities?: unknown };
   if (Array.isArray(a.probabilities)) {
     return Object.fromEntries(
-      (a.probabilities as { value?: unknown; probability?: unknown }[]).map((p) => [
-        String(p.value),
-        Number(p.probability),
-      ]),
+      (a.probabilities as { value?: unknown; probability?: unknown }[]).map((p) => [String(p.value), p.probability]),
     );
   }
-  return (a.probabilities ?? {}) as Record<string, number>;
+  return (a.probabilities ?? {}) as Record<string, unknown>;
 }
 
 const DEFAULT_BASE: Record<DecisionProvider["kind"], string> = {
@@ -298,27 +309,22 @@ const DEFAULT_BASE: Record<DecisionProvider["kind"], string> = {
   openai: "https://api.openai.com/v1",
   typesafe: "https://api.typesafe.ai/v1",
 };
-const DEFAULT_KEY_ENV: Record<DecisionProvider["kind"], DecisionProvider["keyEnv"]> = {
+const KEY_ENV: Record<DecisionProvider["kind"], string> = {
   litellm: "MODEL_GATEWAY_API_KEY",
   openai: "OPENAI_API_KEY",
   typesafe: "TYPESAFE_API_KEY",
 };
 
-/**
- * Resolves each rule's model to an admin-defined provider and asks it one choice question.
- * All three kinds return a probability per option; the caller never sees provider shapes.
- */
 export function createDecisionBackend(opts: {
   providers: () => readonly DecisionProvider[];
   env: Readonly<Record<string, string | undefined>>;
-  /** Base URL used by a litellm provider with no baseUrl of its own. */
   gatewayUrl?: string;
   gatewayKeyHeader?: string;
   fetch?: typeof fetch;
 }): DecisionBackend {
   const fetchImpl = opts.fetch ?? fetch;
   return {
-    async choose({ question, state, options, model, signal }) {
+    async choose({ questions, state, model, signal }) {
       const provider = opts.providers().find((p) => p.id === model.provider);
       if (!provider) throw new Error(`decision provider ${model.provider} is not configured`);
       const base = (
@@ -327,12 +333,22 @@ export function createDecisionBackend(opts: {
         ""
       ).replace(/\/$/, "");
       if (!base) throw new Error(`decision provider ${provider.id} has no base URL`);
-      const keyEnv = provider.keyEnv ?? DEFAULT_KEY_ENV[provider.kind]!;
+      const keyEnv = KEY_ENV[provider.kind];
       const key = opts.env[keyEnv];
       if (!key) throw new Error(`decision provider ${provider.id}: ${keyEnv} is not set`);
-      const header = provider.keyHeader ?? (provider.kind === "litellm" ? opts.gatewayKeyHeader : undefined);
+      const header = provider.kind === "litellm" ? opts.gatewayKeyHeader : undefined;
       const auth: Record<string, string> = header ? { [header]: key } : { authorization: `Bearer ${key}` };
-      const keys = Object.keys(options);
+      const keys = Object.keys(questions);
+      const answerEach = (read: (key: string) => Record<string, number>) =>
+        Object.fromEntries(
+          keys.map((k) => {
+            try {
+              return [k, read(k)];
+            } catch (error) {
+              return [k, error instanceof Error ? error : new Error(String(error))];
+            }
+          }),
+        );
 
       if (provider.kind === "openai") {
         const body = await postJson(
@@ -342,34 +358,36 @@ export function createDecisionBackend(opts: {
           {
             model: model.model,
             input: state,
-            questions: [
-              {
-                type: "choice",
-                name: "decision",
-                instructions: question,
-                choices: keys.map((k) => ({ value: k, description: options[k] })),
-              },
-            ],
+            questions: keys.map((name) => ({
+              type: "choice",
+              name,
+              instructions: questions[name]!.question,
+              choices: Object.entries(questions[name]!.options).map(([value, description]) => ({ value, description })),
+            })),
           },
           signal,
         );
-        const answer = (body.answers as { name?: string; type?: string }[] | undefined)?.find(
-          (a) => a.name === "decision",
-        );
-        if (answer?.type === "refusal") throw new Error("decision provider refused");
-        return normalize(choiceProbabilities(answer), options);
+        const answers = (body.answers as { name?: string; type?: string }[] | undefined) ?? [];
+        return answerEach((k) => {
+          const answer = answers.find((a) => a.name === k);
+          if (answer?.type === "refusal") throw new Error(`decision provider refused: ${sample(answer)}`);
+          return normalize(choiceProbabilities(answer), questions[k]!.options, body);
+        });
       }
 
-      const typesafeQuestion = { decision: { type: "choice", instructions: question, criteria: options } };
+      const typesafeQuestions = Object.fromEntries(
+        keys.map((k) => [k, { type: "choice", instructions: questions[k]!.question, criteria: questions[k]!.options }]),
+      );
       if (provider.kind === "typesafe") {
         const body = await postJson(
           fetchImpl,
           `${base}/systemone`,
           auth,
-          { state, model: model.model, questions: typesafeQuestion },
+          { state, model: model.model, questions: typesafeQuestions },
           signal,
         );
-        return normalize(choiceProbabilities((body.answers as Record<string, unknown> | undefined)?.decision), options);
+        const answers = (body.answers ?? {}) as Record<string, unknown>;
+        return answerEach((k) => normalize(choiceProbabilities(answers[k]), questions[k]!.options, body));
       }
 
       const body = await postJson(
@@ -379,13 +397,15 @@ export function createDecisionBackend(opts: {
         {
           model: model.model,
           messages: [],
-          typesafe: { questions: typesafeQuestion, state },
+          typesafe: { questions: typesafeQuestions, state },
         },
         signal,
       );
-      const content = (body.choices as { message?: { content?: string } }[] | undefined)?.[0]?.message?.content ?? "{}";
-      const parsed = JSON.parse(content) as { answers?: Record<string, unknown> } & Record<string, unknown>;
-      return normalize(choiceProbabilities((parsed.answers ?? parsed).decision), options);
+      const content = (body.choices as { message?: { content?: string } }[] | undefined)?.[0]?.message?.content;
+      if (typeof content !== "string") throw new Error(`classifier returned no message content: ${sample(body)}`);
+      const parsed = parseJson(content) as { answers?: Record<string, unknown> } & Record<string, unknown>;
+      const answers = (parsed.answers ?? parsed) as Record<string, unknown>;
+      return answerEach((k) => normalize(choiceProbabilities(answers[k]), questions[k]!.options, content));
     },
   };
 }

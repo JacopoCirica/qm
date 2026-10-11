@@ -142,7 +142,6 @@ export interface OrchestratorDeps {
   turnLeaseWaitMs?: number;
   securityScreenTimeoutMs?: number;
   securityScreener?: SecurityScreener;
-  /** Runs admin-configured decision rules; see src/decisions. */
   decisionBackend?: DecisionBackend;
   backgroundJobTtlMs?: number;
   sandboxCapabilityTtlMs?: number;

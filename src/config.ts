@@ -189,7 +189,6 @@ export interface Config {
   securityScreenTimeoutMs: number;
   securityScreen: SecurityScreenMode;
   securityScreenClassifier: "model" | "proxy";
-  /** Keys a decision provider may name (see src/decisions); providers and rules are admin config. */
   decisionKeys?: { OPENAI_API_KEY?: string; TYPESAFE_API_KEY?: string };
   securityScreenProxy?: {
     provider: string;

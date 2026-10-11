@@ -214,7 +214,7 @@ export const ADMIN_RESOURCES: readonly AdminResource[] = [
     target: "org",
     clearable: true,
     label:
-      "Endpoints that answer decision rules' questions: a LiteLLM gateway (openai_decisions/ and typesafe/ models), OpenAI's Decisions API, or TypeSafe. Keys come from the named deployment env var, never from this setting.",
+      "Endpoints that answer decision rules' questions: a LiteLLM gateway (openai_decisions/ and typesafe/ models), OpenAI's Decisions API, or TypeSafe. Keys come from MODEL_GATEWAY_API_KEY, OPENAI_API_KEY or TYPESAFE_API_KEY, never from this setting.",
     readKey: "decisionProviders",
     get: (deps) => deps.config!.getDecisionProviders(),
     apply: async (ctx, _actor, scope) => {
