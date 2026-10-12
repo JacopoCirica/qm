@@ -1,13 +1,19 @@
+import type { PoolClient } from "pg";
 import { createPgPool, withPgTransaction } from "../persistence/pg-pool.ts";
 import { checkRuleSet, type DecisionHook, type DecisionProvider, type DecisionRule } from "./decisions.ts";
 
+interface DecisionWriter {
+  actorId: string;
+  agent: boolean;
+}
+
 export interface DecisionStore {
-  providers(): Promise<DecisionProvider[]>;
+  providers(ids?: readonly string[]): Promise<DecisionProvider[]>;
   rules(hook?: DecisionHook): Promise<DecisionRule[]>;
-  saveProvider(provider: DecisionProvider, actorId: string): Promise<void>;
-  removeProvider(id: string): Promise<void>;
-  saveRule(rule: DecisionRule, actorId: string): Promise<void>;
-  removeRule(id: string): Promise<void>;
+  saveProvider(provider: DecisionProvider, by: DecisionWriter): Promise<void>;
+  removeProvider(id: string, by: DecisionWriter): Promise<void>;
+  saveRule(rule: DecisionRule, by: DecisionWriter): Promise<void>;
+  removeRule(id: string, by: DecisionWriter): Promise<void>;
 }
 
 const SCHEMA = [
@@ -45,18 +51,28 @@ const toRule = (r: Record<string, unknown>): DecisionRule => ({
 });
 
 const RULES = "SELECT * FROM decision_rules";
-const MAX_STORED_RULES = 200;
 const CACHE_MS = 10_000;
+const ENFORCED_RULE = "SELECT 1 FROM decision_rules WHERE rule_id = $1 AND mode = 'enforce'";
+const ENFORCED_PROVIDER = "SELECT 1 FROM decision_rules WHERE provider_id = $1 AND mode = 'enforce'";
+const AGENT_LIMIT =
+  "agents can't enforce decision rules or change enforced rules and their providers; an admin does that from the dashboard";
 
 export function createPostgresDecisionStore(connectionString: string): DecisionStore {
   const { q, pool } = createPgPool(connectionString, "decisions/0001", SCHEMA);
   const active = new Map<DecisionHook, { at: number; rules: Promise<DecisionRule[]> }>();
-  const load = async (hook: DecisionHook) =>
-    (await q(`${RULES} WHERE hook = $1 AND mode <> 'off' ORDER BY rule_id`, [hook])).map(toRule);
-  const changed = () => active.clear();
+  const write = async (by: DecisionWriter, guard: string, id: string, fn: (db: PoolClient) => Promise<unknown>) => {
+    await withPgTransaction(await pool(), async (db) => {
+      await db.query("LOCK TABLE decision_rules IN SHARE ROW EXCLUSIVE MODE");
+      if (by.agent && (await db.query(guard, [id])).rows.length) throw new Error(AGENT_LIMIT);
+      await fn(db);
+    });
+    active.clear();
+  };
   return {
-    async providers() {
-      const rows = await q("SELECT * FROM decision_providers ORDER BY provider_id");
+    async providers(ids) {
+      const rows = ids
+        ? await q("SELECT * FROM decision_providers WHERE provider_id = ANY($1)", [ids])
+        : await q("SELECT * FROM decision_providers ORDER BY provider_id");
       return rows.map((r) => ({
         id: r.provider_id as string,
         protocol: r.protocol as DecisionProvider["protocol"],
@@ -67,39 +83,36 @@ export function createPostgresDecisionStore(connectionString: string): DecisionS
       if (!hook) return (await q(`${RULES} ORDER BY rule_id`)).map(toRule);
       const hit = active.get(hook);
       if (hit && Date.now() - hit.at < CACHE_MS) return hit.rules;
-      const rules = load(hook);
+      const rules = q(`${RULES} WHERE hook = $1 AND mode <> 'off' ORDER BY rule_id`, [hook]).then((r) => r.map(toRule));
       active.set(hook, { at: Date.now(), rules });
       rules.catch(() => active.delete(hook));
       return rules;
     },
-    async saveProvider(p, actorId) {
-      await q(
-        `INSERT INTO decision_providers (provider_id, protocol, base_url, credential, updated_by, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (provider_id) DO UPDATE SET protocol = $2, base_url = $3, credential = $4, updated_by = $5, updated_at = $6`,
-        [p.id, p.protocol, p.baseUrl ?? null, p.credential ?? null, actorId, Date.now()],
-      );
-    },
-    async removeProvider(id) {
+    saveProvider: (p, by) =>
+      write(by, ENFORCED_PROVIDER, p.id, (db) =>
+        db.query(
+          `INSERT INTO decision_providers (provider_id, protocol, base_url, credential, updated_by, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (provider_id) DO UPDATE SET protocol = $2, base_url = $3, credential = $4, updated_by = $5, updated_at = $6`,
+          [p.id, p.protocol, p.baseUrl ?? null, p.credential ?? null, by.actorId, Date.now()],
+        ),
+      ),
+    async removeProvider(id, by) {
       try {
-        await q("DELETE FROM decision_providers WHERE provider_id = $1", [id]);
+        await write(by, ENFORCED_PROVIDER, id, (db) =>
+          db.query("DELETE FROM decision_providers WHERE provider_id = $1", [id]),
+        );
       } catch (error) {
         if ((error as { code?: string }).code === "23503")
           throw new Error(`decision provider ${id} is still used by a rule`, { cause: error });
         throw error;
       }
     },
-    async saveRule(rule, actorId) {
-      await withPgTransaction(await pool(), async (db) => {
-        await db.query("LOCK TABLE decision_rules IN SHARE ROW EXCLUSIVE MODE");
-        const { rows } = await db.query(
-          "SELECT count(*)::int AS n, bool_or(rule_id = $1) AS exists FROM decision_rules",
-          [rule.id],
-        );
-        if (!rows[0].exists && rows[0].n >= MAX_STORED_RULES)
-          throw new Error(`at most ${MAX_STORED_RULES} decision rules; remove one first`);
-        const active = await db.query(`${RULES} WHERE rule_id <> $1 AND mode <> 'off' ORDER BY rule_id`, [rule.id]);
-        const error = checkRuleSet([...active.rows.map(toRule), rule]);
+    saveRule: (rule, by) =>
+      write(by, ENFORCED_RULE, rule.id, async (db) => {
+        if (by.agent && rule.mode === "enforce") throw new Error(AGENT_LIMIT);
+        const others = await db.query(`${RULES} WHERE rule_id <> $1 AND mode <> 'off' ORDER BY rule_id`, [rule.id]);
+        const error = checkRuleSet([...others.rows.map(toRule), rule]);
         if (error) throw new Error(error);
         await db.query(
           `INSERT INTO decision_rules
@@ -116,16 +129,12 @@ export function createPostgresDecisionStore(connectionString: string): DecisionS
             rule.model.model,
             rule.mode,
             rule.onError,
-            actorId,
+            by.actorId,
             Date.now(),
           ],
         );
-      });
-      changed();
-    },
-    async removeRule(id) {
-      await q("DELETE FROM decision_rules WHERE rule_id = $1", [id]);
-      changed();
-    },
+      }),
+    removeRule: (id, by) =>
+      write(by, ENFORCED_RULE, id, (db) => db.query("DELETE FROM decision_rules WHERE rule_id = $1", [id])),
   };
 }

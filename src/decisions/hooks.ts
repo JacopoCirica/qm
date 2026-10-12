@@ -21,7 +21,8 @@ export function createDecisionHooks(
     const rules = (await store?.rules(hook)) ?? [];
     if (!store || !rules.length) return undefined;
     let providers: Promise<readonly DecisionProvider[]> | undefined;
-    const backend = backendFor(() => (providers ??= store.providers()));
+    const ids = [...new Set(rules.map((r) => r.model.provider))];
+    const backend = backendFor(() => (providers ??= store.providers(ids)));
     const signal = AbortSignal.any([AbortSignal.timeout(HOOK_TIMEOUT_MS), ...(turn.cancel ? [turn.cancel] : [])]);
     const { decisive, results } = await runHook(rules, hook, state, backend, signal);
     for (const result of results)

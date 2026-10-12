@@ -334,7 +334,7 @@ test("most_confident hook points follow the likeliest enforced verdict and error
   assert.equal(failing.decisive?.action, "continue", "a failed classifier falls back to its onError option");
 });
 
-test("the decisions resource checks the model catalog and leaves enforcement to admins", async () => {
+test("the decisions resource checks the model catalog and marks agent writes", async () => {
   const { ADMIN_RESOURCE_BY_ID } = await import("../src/api/routes/admin-resources.ts");
   const { selectableBaseModels } = await import("../src/model/pi-models.ts");
   const saved: DecisionRule[] = [];
@@ -343,7 +343,7 @@ test("the decisions resource checks the model catalog and leaves enforcement to 
     rules: async () => saved,
     saveProvider: async () => {},
     removeProvider: async () => {},
-    saveRule: async (r: DecisionRule) => void saved.push(r),
+    saveRule: async (r: DecisionRule, by: { agent: boolean }) => void saved.push({ ...r, id: `${r.id}:${by.agent}` }),
     removeRule: async () => {},
   };
   const modelId = selectableBaseModels()[0]!.id;
@@ -361,18 +361,13 @@ test("the decisions resource checks the model catalog and leaves enforcement to 
       "org:default-org",
     );
   assert.match(err(await apply({ rule: route() })), /m-deep is not in this deployment's model catalog/);
-  const agent = { actorId: "admin@x.com" };
-  assert.match(err(await apply({ rule }, agent)), /can't enforce/);
-  assert.deepEqual(await apply({ rule: { ...rule, id: "shadow", mode: "observe" } }, agent), { ok: true });
+  assert.deepEqual(await apply({ rule: { ...rule, mode: "observe" } }, { actorId: "admin@x.com" }), { ok: true });
   assert.deepEqual(await apply({ rule }), { ok: true });
-  assert.match(err(await apply({ rule: { ...rule, mode: "off" } }, agent)), /can't enforce/);
-  assert.match(err(await apply({ removeRule: rule.id }, agent)), /can't enforce/);
-  assert.match(err(await apply({ provider: { id: "gw", protocol: "systemone" } }, agent)), /can't enforce/);
   assert.deepEqual(
     saved.map((r) => [r.id, r.mode]),
     [
-      ["shadow", "observe"],
-      ["router", "enforce"],
+      ["router:true", "observe"],
+      ["router:false", "enforce"],
     ],
   );
 });
