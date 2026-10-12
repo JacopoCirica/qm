@@ -33,8 +33,16 @@ function blankRule() {
     mode: "observe",
     onError: "a",
     options: [
-      { key: "a", description: "", action: first, modelId: "", effortLevel: "", fastMode: false },
-      { key: "b", description: "", action: second || first, modelId: "", effortLevel: "", fastMode: false },
+      { key: "a", description: "", action: first, message: "", modelId: "", effortLevel: "", fastMode: false },
+      {
+        key: "b",
+        description: "",
+        action: second || first,
+        message: "",
+        modelId: "",
+        effortLevel: "",
+        fastMode: false,
+      },
     ],
   };
 }
@@ -184,6 +192,7 @@ function ruleForm() {
             redraw();
           })}
           ${field("Description", o.description, (v) => (o.description = v))}
+          ${field("Message", o.message, (v) => (o.message = v), "optional")}
           ${select("Action", o.action, actions, (v) => (o.action = v))}
           ${
             o.action === "use_runtime"
@@ -200,14 +209,27 @@ function ruleForm() {
           }
           ${
             d.options.length > 2
-              ? html`<button class="danger" @click=${() => (d.options.splice(i, 1), redraw())}>Remove option</button>`
+              ? html`<button
+                  class="danger"
+                  @click=${() => (d.options.splice(i, 1), d.options.some((x: any) => x.key === d.onError) || (d.onError = d.options[0].key), redraw())}
+                >
+                  Remove option
+                </button>`
               : ""
           }
         </fieldset>`,
     )}
     <button
       @click=${() => (
-        d.options.push({ key: "", description: "", action: actions[0], modelId: "", effortLevel: "", fastMode: false }),
+        d.options.push({
+          key: "",
+          description: "",
+          action: actions[0],
+          message: "",
+          modelId: "",
+          effortLevel: "",
+          fastMode: false,
+        }),
         redraw()
       )}
     >

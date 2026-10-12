@@ -52,6 +52,7 @@ const toRule = (r: Record<string, unknown>): DecisionRule => ({
 
 const RULES = "SELECT * FROM decision_rules";
 const CACHE_MS = 10_000;
+const MAX_STORED_RULES = 100;
 const ENFORCED_RULE = "SELECT 1 FROM decision_rules WHERE rule_id = $1 AND mode = 'enforce'";
 const ENFORCED_PROVIDER = "SELECT 1 FROM decision_rules WHERE provider_id = $1 AND mode = 'enforce'";
 const AGENT_LIMIT =
@@ -111,6 +112,9 @@ export function createPostgresDecisionStore(connectionString: string): DecisionS
     saveRule: (rule, by) =>
       write(by, ENFORCED_RULE, rule.id, async (db) => {
         if (by.agent && rule.mode === "enforce") throw new Error(AGENT_LIMIT);
+        const { rows } = await db.query("SELECT count(*)::int AS n FROM decision_rules WHERE rule_id <> $1", [rule.id]);
+        if (rows[0].n >= MAX_STORED_RULES)
+          throw new Error(`at most ${MAX_STORED_RULES} decision rules; remove one first`);
         const others = await db.query(`${RULES} WHERE rule_id <> $1 AND mode <> 'off' ORDER BY rule_id`, [rule.id]);
         const error = checkRuleSet([...others.rows.map(toRule), rule]);
         if (error) throw new Error(error);
