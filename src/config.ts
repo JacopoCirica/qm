@@ -189,7 +189,6 @@ export interface Config {
   securityScreenTimeoutMs: number;
   securityScreen: SecurityScreenMode;
   securityScreenClassifier: "model" | "proxy";
-  decisionKeys?: { OPENAI_API_KEY?: string; TYPESAFE_API_KEY?: string };
   securityScreenProxy?: {
     provider: string;
     endpoint: string;
@@ -1517,10 +1516,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     sharingPosture: sharingPostureEnvStrict(env.HARNESS_SHARING_POSTURE),
     securityScreen,
     securityScreenClassifier,
-    decisionKeys: {
-      ...(env.OPENAI_API_KEY ? { OPENAI_API_KEY: env.OPENAI_API_KEY } : {}),
-      ...(env.TYPESAFE_API_KEY ? { TYPESAFE_API_KEY: env.TYPESAFE_API_KEY } : {}),
-    },
     ...(securityScreenClassifier === "proxy"
       ? { securityScreenProxy: { provider: proxyProvider!, endpoint: proxyEndpoint!, token: proxyToken! } }
       : {}),

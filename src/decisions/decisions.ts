@@ -16,12 +16,13 @@ export interface RuntimeParams {
   fastMode?: boolean;
 }
 
-const DECISION_PROVIDER_KINDS = ["litellm", "openai", "typesafe"] as const;
+const DECISION_PROTOCOLS = ["chat-completions", "decisions", "systemone"] as const;
 
 export interface DecisionProvider {
   id: string;
-  kind: (typeof DECISION_PROVIDER_KINDS)[number];
+  protocol: (typeof DECISION_PROTOCOLS)[number];
   baseUrl?: string;
+  credential?: string;
 }
 
 interface DecisionModelRef {
@@ -88,8 +89,14 @@ export function parseDecisionProviders(value: unknown): { providers: DecisionPro
       return { error: `provider ${i}: id must match ${PROVIDER_ID}` };
     if (ids.has(r.id)) return { error: `provider ${r.id}: duplicate id` };
     ids.add(r.id);
-    if (!DECISION_PROVIDER_KINDS.includes(r.kind as DecisionProvider["kind"]))
-      return { error: `provider ${r.id}: kind must be one of ${DECISION_PROVIDER_KINDS.join(", ")}` };
+    if (!DECISION_PROTOCOLS.includes(r.protocol as DecisionProvider["protocol"]))
+      return { error: `provider ${r.id}: protocol must be one of ${DECISION_PROTOCOLS.join(", ")}` };
+    if ((r.baseUrl === undefined) !== (r.credential === undefined))
+      return {
+        error: `provider ${r.id}: set baseUrl and credential together, or neither to use the model gateway`,
+      };
+    if (r.credential !== undefined && (typeof r.credential !== "string" || !PROVIDER_ID.test(r.credential)))
+      return { error: `provider ${r.id}: credential must name an org service credential` };
     if (r.baseUrl !== undefined) {
       let url: URL;
       try {
@@ -102,8 +109,8 @@ export function parseDecisionProviders(value: unknown): { providers: DecisionPro
     }
     providers.push({
       id: r.id,
-      kind: r.kind as DecisionProvider["kind"],
-      ...(r.baseUrl !== undefined ? { baseUrl: String(r.baseUrl) } : {}),
+      protocol: r.protocol as DecisionProvider["protocol"],
+      ...(r.baseUrl !== undefined ? { baseUrl: String(r.baseUrl), credential: r.credential as string } : {}),
     });
   }
   return { providers };
@@ -342,40 +349,37 @@ function choiceProbabilities(answer: unknown): Record<string, unknown> {
   return (a.probabilities ?? {}) as Record<string, unknown>;
 }
 
-const DEFAULT_BASE: Record<DecisionProvider["kind"], string> = {
-  litellm: "",
-  openai: "https://api.openai.com/v1",
-  typesafe: "https://api.typesafe.ai/v1",
-};
-const KEY_ENV: Record<DecisionProvider["kind"], string> = {
-  litellm: "MODEL_GATEWAY_API_KEY",
-  openai: "OPENAI_API_KEY",
-  typesafe: "TYPESAFE_API_KEY",
-};
-
 export function createDecisionBackend(opts: {
   providers: () => readonly DecisionProvider[];
-  env: Readonly<Record<string, string | undefined>>;
-  gatewayUrl?: string;
-  gatewayKeyHeader?: string;
+  gateway?: { url: string; apiKey: string; apiKeyHeader?: string };
+  credential: (slug: string) => Promise<{ host: string; enabled: boolean; header: [string, string] } | null>;
   fetch?: typeof fetch;
 }): DecisionBackend {
   const fetchImpl = opts.fetch ?? fetch;
+  const endpoint = async (provider: DecisionProvider): Promise<{ base: string; auth: Record<string, string> }> => {
+    if (!provider.baseUrl) {
+      if (!opts.gateway) throw new Error(`decision provider ${provider.id}: no model gateway is configured`);
+      const header = opts.gateway.apiKeyHeader;
+      return {
+        base: opts.gateway.url.replace(/\/$/, ""),
+        auth: header ? { [header]: opts.gateway.apiKey } : { authorization: `Bearer ${opts.gateway.apiKey}` },
+      };
+    }
+    const rec = await opts.credential(provider.credential!);
+    if (!rec?.enabled)
+      throw new Error(`decision provider ${provider.id}: credential ${provider.credential} is missing or disabled`);
+    const url = new URL(provider.baseUrl);
+    if (url.host !== rec.host)
+      throw new Error(
+        `decision provider ${provider.id}: credential ${provider.credential} is for ${rec.host}, not ${url.host}`,
+      );
+    return { base: provider.baseUrl.replace(/\/$/, ""), auth: { [rec.header[0]]: rec.header[1] } };
+  };
   return {
     async choose({ questions, state, model, signal }) {
       const provider = opts.providers().find((p) => p.id === model.provider);
       if (!provider) throw new Error(`decision provider ${model.provider} is not configured`);
-      const base = (
-        provider.baseUrl ??
-        (provider.kind === "litellm" ? opts.gatewayUrl : DEFAULT_BASE[provider.kind]) ??
-        ""
-      ).replace(/\/$/, "");
-      if (!base) throw new Error(`decision provider ${provider.id} has no base URL`);
-      const keyEnv = KEY_ENV[provider.kind];
-      const key = opts.env[keyEnv];
-      if (!key) throw new Error(`decision provider ${provider.id}: ${keyEnv} is not set`);
-      const header = provider.kind === "litellm" ? opts.gatewayKeyHeader : undefined;
-      const auth: Record<string, string> = header ? { [header]: key } : { authorization: `Bearer ${key}` };
+      const { base, auth } = await endpoint(provider);
       const keys = Object.keys(questions);
       const answerEach = (read: (key: string) => Record<string, number>) =>
         Object.fromEntries(
@@ -388,7 +392,7 @@ export function createDecisionBackend(opts: {
           }),
         );
 
-      if (provider.kind === "openai") {
+      if (provider.protocol === "decisions") {
         const body = await postJson(
           fetchImpl,
           `${base}/decisions`,
@@ -416,7 +420,7 @@ export function createDecisionBackend(opts: {
       const typesafeQuestions = Object.fromEntries(
         keys.map((k) => [k, { type: "choice", instructions: questions[k]!.question, criteria: questions[k]!.options }]),
       );
-      if (provider.kind === "typesafe") {
+      if (provider.protocol === "systemone") {
         const body = await postJson(
           fetchImpl,
           `${base}/systemone`,

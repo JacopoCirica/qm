@@ -11,7 +11,7 @@ import {
   type DecisionProvider,
 } from "../src/decisions/decisions.ts";
 
-const PROVIDERS: DecisionProvider[] = [{ id: "gw", kind: "litellm" }];
+const PROVIDERS: DecisionProvider[] = [{ id: "gw", protocol: "chat-completions" }];
 import { buildApp } from "../src/wiring.ts";
 import { testConfig } from "./support/test-config.ts";
 import { selectDefaultSandbox } from "./support/default-sandbox.ts";
@@ -104,8 +104,12 @@ test("runHook: highest-probability option decides; observe rules never act; erro
   assert.equal(failed.results[0]?.error, "Error: down");
   const caused = new Error("fetch failed", { cause: new Error("getaddrinfo ENOTFOUND gateway") });
   const malformed = createDecisionBackend({
-    providers: () => [{ id: "oa", kind: "openai" }],
-    env: { OPENAI_API_KEY: "k" },
+    providers: () => [{ id: "oa", protocol: "decisions", baseUrl: "https://dec.example/v1", credential: "dec" }],
+    credential: async (slug: string) => ({
+      host: slug === "dec" ? "dec.example" : "ts.example",
+      enabled: true,
+      header: ["Authorization", `Bearer ${slug}-key`] as [string, string],
+    }),
     fetch: async () =>
       new Response(
         JSON.stringify({
@@ -165,18 +169,28 @@ function capture(response: unknown) {
   return { calls, fetchImpl };
 }
 
-test("providers parse and refuse unknown kinds", () => {
+test("providers name a protocol, and a custom endpoint needs an org credential", () => {
   assert.ok(
     "providers" in
       parseDecisionProviders([
-        { id: "gw", kind: "litellm" },
-        { id: "oa", kind: "openai" },
+        { id: "gw", protocol: "chat-completions" },
+        { id: "oa", protocol: "decisions", baseUrl: "https://dec.example/v1", credential: "dec" },
       ]),
   );
-  assert.match(String((parseDecisionProviders([{ id: "x", kind: "llama" }]) as { error: string }).error), /kind/);
+  assert.match(
+    String((parseDecisionProviders([{ id: "x", protocol: "llama" }]) as { error: string }).error),
+    /protocol/,
+  );
+  assert.match(
+    String(
+      (parseDecisionProviders([{ id: "x", protocol: "decisions", baseUrl: "https://a.example" }]) as { error: string })
+        .error,
+    ),
+    /together/,
+  );
 });
 
-test("litellm provider sends the native typesafe body to the model gateway", async () => {
+test("gateway provider sends the native typesafe body to the model gateway", async () => {
   const { calls, fetchImpl } = capture({
     choices: [
       {
@@ -188,9 +202,8 @@ test("litellm provider sends the native typesafe body to the model gateway", asy
   });
   const backend = createDecisionBackend({
     providers: () => PROVIDERS,
-    env: { MODEL_GATEWAY_API_KEY: "gk" },
-    gatewayUrl: "http://gateway:8080/",
-    gatewayKeyHeader: "api-key",
+    gateway: { url: "http://gateway:8080/", apiKey: "gk", apiKeyHeader: "api-key" },
+    credential: async () => null,
     fetch: fetchImpl,
   });
   assert.deepEqual(await ask(backend, { provider: "gw", model: "openai_decisions/gpt-6-luna" }), { yes: 0.8, no: 0.2 });
@@ -203,7 +216,7 @@ test("litellm provider sends the native typesafe body to the model gateway", asy
   });
 });
 
-test("openai provider calls the Decisions API and reads its probability array", async () => {
+test("decisions protocol calls the Decisions API and reads its probability array", async () => {
   const { calls, fetchImpl } = capture({
     answers: [
       {
@@ -218,13 +231,17 @@ test("openai provider calls the Decisions API and reads its probability array", 
     ],
   });
   const backend = createDecisionBackend({
-    providers: () => [{ id: "oa", kind: "openai" }],
-    env: { OPENAI_API_KEY: "ok" },
+    providers: () => [{ id: "oa", protocol: "decisions", baseUrl: "https://dec.example/v1", credential: "dec" }],
+    credential: async (slug: string) => ({
+      host: slug === "dec" ? "dec.example" : "ts.example",
+      enabled: true,
+      header: ["Authorization", `Bearer ${slug}-key`] as [string, string],
+    }),
     fetch: fetchImpl,
   });
   assert.deepEqual(await ask(backend, { provider: "oa", model: "gpt-6-luna" }), { yes: 0.9, no: 0.1 });
-  assert.equal(calls[0]!.url, "https://api.openai.com/v1/decisions");
-  assert.equal(calls[0]!.headers.authorization, "Bearer ok");
+  assert.equal(calls[0]!.url, "https://dec.example/v1/decisions");
+  assert.equal(calls[0]!.headers.Authorization, "Bearer dec-key");
   assert.deepEqual(calls[0]!.body.questions, [
     {
       type: "choice",
@@ -238,21 +255,39 @@ test("openai provider calls the Decisions API and reads its probability array", 
   ]);
 });
 
-test("typesafe provider calls System One directly", async () => {
+test("systemone protocol posts to /systemone", async () => {
   const { calls, fetchImpl } = capture({ answers: { decision: { type: "choice", probabilities: { yes: 3, no: 1 } } } });
   const backend = createDecisionBackend({
-    providers: () => [{ id: "ts", kind: "typesafe" }],
-    env: { TYPESAFE_API_KEY: "tk" },
+    providers: () => [{ id: "ts", protocol: "systemone", baseUrl: "https://ts.example/v1", credential: "ts" }],
+    credential: async (slug: string) => ({
+      host: slug === "dec" ? "dec.example" : "ts.example",
+      enabled: true,
+      header: ["Authorization", `Bearer ${slug}-key`] as [string, string],
+    }),
     fetch: fetchImpl,
   });
   assert.deepEqual(await ask(backend, { provider: "ts", model: "jev-latest" }), { yes: 0.75, no: 0.25 });
-  assert.equal(calls[0]!.url, "https://api.typesafe.ai/v1/systemone");
+  assert.equal(calls[0]!.url, "https://ts.example/v1/systemone");
 });
 
-test("a missing provider or key is an error, so the rule falls back to onError", async () => {
-  const backend = createDecisionBackend({ providers: () => [{ id: "oa", kind: "openai" }], env: {} });
-  await assert.rejects(ask(backend, { provider: "oa", model: "gpt-6-luna" }), /OPENAI_API_KEY is not set/);
-  await assert.rejects(ask(backend, { provider: "gone", model: "x" }), /not configured/);
+test("a missing, disabled or mismatched credential is an error, so the rule falls back to onError", async () => {
+  const backend = (rec: { host: string; enabled: boolean } | null) =>
+    createDecisionBackend({
+      providers: () => [{ id: "oa", protocol: "decisions", baseUrl: "https://dec.example/v1", credential: "dec" }],
+      credential: async () => rec && { ...rec, header: ["Authorization", "Bearer x"] as [string, string] },
+    });
+  await assert.rejects(ask(backend(null), { provider: "oa", model: "m" }), /missing or disabled/);
+  await assert.rejects(
+    ask(backend({ host: "dec.example", enabled: false }), { provider: "oa", model: "m" }),
+    /missing or disabled/,
+  );
+  await assert.rejects(
+    ask(backend({ host: "evil.example", enabled: true }), { provider: "oa", model: "m" }),
+    /not dec.example/,
+  );
+  await assert.rejects(ask(backend(null), { provider: "gone", model: "x" }), /not configured/);
+  const noGateway = createDecisionBackend({ providers: () => PROVIDERS, credential: async () => null });
+  await assert.rejects(ask(noGateway, { provider: "gw", model: "m" }), /no model gateway/);
 });
 
 test("a decision rule on tool_response quarantines tool output end to end", async () => {

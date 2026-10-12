@@ -1,3 +1,4 @@
+import { brokerCredentialAuthHeader } from "./api/credential-broker.ts";
 import { createDecisionBackend, runHook, type DecisionBackend, type DecisionHook } from "./decisions/decisions.ts";
 import type { GovernorVerdict } from "./harness/goal.ts";
 import type { SlackSessionStatusState } from "./slack/session-status.ts";
@@ -1474,10 +1475,19 @@ export function buildApp(
     overrides.decisionBackend ??
     createDecisionBackend({
       providers: () => configStore.getDecisionProviders(),
-      env: { ...config.decisionKeys, MODEL_GATEWAY_API_KEY: config.modelGateway?.apiKey },
-      ...(config.modelGateway
-        ? { gatewayUrl: config.modelGateway.url, gatewayKeyHeader: config.modelGateway.apiKeyHeader }
+      ...(config.modelGateway?.apiKey
+        ? {
+            gateway: {
+              url: config.modelGateway.url,
+              apiKey: config.modelGateway.apiKey,
+              ...(config.modelGateway.apiKeyHeader ? { apiKeyHeader: config.modelGateway.apiKeyHeader } : {}),
+            },
+          }
         : {}),
+      credential: async (slug) => {
+        const rec = await keychain?.getServiceCredentialSecret(scopeId("org", config.orgId), slug);
+        return rec ? { host: rec.host, enabled: rec.enabled, header: brokerCredentialAuthHeader(rec) } : null;
+      },
     });
   const DECISION_HOOK_TIMEOUT_MS = 5_000;
   const decide = async (hook: DecisionHook, state: string, input: HarnessTurnInput) => {
