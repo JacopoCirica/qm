@@ -46,6 +46,10 @@ function blankRule() {
     ],
   };
 }
+function showRule() {
+  redraw();
+  document.querySelector("#card-decisions .decision-rule-form")?.scrollIntoView({ block: "nearest" });
+}
 function editRule(r: any) {
   state.rule = {
     editing: true,
@@ -66,7 +70,7 @@ function editRule(r: any) {
       fastMode: o.runtime?.fastMode || false,
     })),
   };
-  redraw();
+  showRule();
 }
 function ruleBody(d: any) {
   return {
@@ -309,7 +313,7 @@ function template() {
               <button
                 class="primary"
                 ?disabled=${state.saving || !!state.rule || !data.providers.length}
-                @click=${() => ((state.rule = blankRule()), redraw())}
+                @click=${() => ((state.rule = blankRule()), showRule())}
               >
                 + Add rule</button
               ><span class="status">${state.message}</span>
