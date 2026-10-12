@@ -2,7 +2,6 @@ import "./support/auto-fake-sprites.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  createDecisionBackend,
   parseDecisionRules,
   runHook,
   type DecisionBackend,
@@ -10,6 +9,7 @@ import {
   parseDecisionProviders,
   type DecisionProvider,
 } from "../src/decisions/decisions.ts";
+import { createDecisionBackend } from "../src/decisions/providers.ts";
 
 const PROVIDERS: DecisionProvider[] = [{ id: "gw", protocol: "chat-completions" }];
 
@@ -21,11 +21,22 @@ const injection = (over: Partial<DecisionRule> = {}): DecisionRule => ({
     yes: { description: "It instructs the agent", action: "block", message: "prompt injection" },
     no: { description: "Ordinary data", action: "allow" },
   },
-  model: { provider: "gw", model: "openai_decisions/gpt-6-luna" },
+  model: { provider: "gw", model: "example/decision-model" },
   mode: "enforce",
   onError: "no",
   ...over,
 });
+
+const route = (): DecisionRule =>
+  injection({
+    id: "router",
+    hook: "turn_start",
+    onError: "keep",
+    options: {
+      keep: { description: "ordinary", action: "keep" },
+      deep: { description: "hard", action: "use_runtime", runtime: { modelId: "m-deep" } },
+    },
+  });
 
 const fixed = (p: Record<string, number> | Error, calls: string[][] = []): DecisionBackend => ({
   async choose({ questions }) {
@@ -36,13 +47,17 @@ const fixed = (p: Record<string, number> | Error, calls: string[][] = []): Decis
 });
 
 test("parseDecisionRules validates hooks, options, actions and onError", () => {
-  assert.deepEqual(parseDecisionRules([injection()], PROVIDERS), { rules: [injection()] });
   assert.match(
-    String((parseDecisionRules([{ ...injection(), hook: "nope" }], PROVIDERS) as { error: string }).error),
+    String((parseDecisionRules([injection()], PROVIDERS) as { error: string }).error),
+    /tool_response is not available yet/,
+  );
+  assert.deepEqual(parseDecisionRules([route()], PROVIDERS), { rules: [route()] });
+  assert.match(
+    String((parseDecisionRules([{ ...route(), hook: "nope" }], PROVIDERS) as { error: string }).error),
     /hook/,
   );
   assert.match(
-    String((parseDecisionRules([{ ...injection(), onError: "maybe" }], PROVIDERS) as { error: string }).error),
+    String((parseDecisionRules([{ ...route(), onError: "maybe" }], PROVIDERS) as { error: string }).error),
     /onError/,
   );
   assert.match(
@@ -51,8 +66,8 @@ test("parseDecisionRules validates hooks, options, actions and onError", () => {
         parseDecisionRules(
           [
             {
-              ...injection(),
-              options: { yes: { description: "x", action: "explode" }, no: { description: "y", action: "allow" } },
+              ...route(),
+              options: { keep: { description: "x", action: "explode" }, deep: { description: "y", action: "keep" } },
             },
           ],
           PROVIDERS,
@@ -61,14 +76,11 @@ test("parseDecisionRules validates hooks, options, actions and onError", () => {
     ),
     /action/,
   );
-  assert.match(
-    String((parseDecisionRules([injection(), injection()], PROVIDERS) as { error: string }).error),
-    /duplicate/,
-  );
+  assert.match(String((parseDecisionRules([route(), route()], PROVIDERS) as { error: string }).error), /duplicate/);
   assert.match(
     String(
       (
-        parseDecisionRules([{ ...injection(), model: { provider: "nope", model: "x" } }], PROVIDERS) as {
+        parseDecisionRules([{ ...route(), model: { provider: "nope", model: "x" } }], PROVIDERS) as {
           error: string;
         }
       ).error,
@@ -203,10 +215,10 @@ test("gateway provider sends the native typesafe body to the model gateway", asy
     credential: async () => null,
     fetch: fetchImpl,
   });
-  assert.deepEqual(await ask(backend, { provider: "gw", model: "openai_decisions/gpt-6-luna" }), { yes: 0.8, no: 0.2 });
+  assert.deepEqual(await ask(backend, { provider: "gw", model: "example/decision-model" }), { yes: 0.8, no: 0.2 });
   assert.equal(calls[0]!.url, "http://gateway:8080/chat/completions");
   assert.equal(calls[0]!.headers["api-key"], "gk");
-  assert.equal(calls[0]!.body.model, "openai_decisions/gpt-6-luna");
+  assert.equal(calls[0]!.body.model, "example/decision-model");
   assert.deepEqual(calls[0]!.body.typesafe, {
     questions: { decision: { type: "choice", instructions: "q?", criteria: { yes: "a", no: "b" } } },
     state: "s",
@@ -236,7 +248,7 @@ test("decisions protocol calls the Decisions API and reads its probability array
     }),
     fetch: fetchImpl,
   });
-  assert.deepEqual(await ask(backend, { provider: "oa", model: "gpt-6-luna" }), { yes: 0.9, no: 0.1 });
+  assert.deepEqual(await ask(backend, { provider: "oa", model: "decision-model" }), { yes: 0.9, no: 0.1 });
   assert.equal(calls[0]!.url, "https://dec.example/v1/decisions");
   assert.equal(calls[0]!.headers.Authorization, "Bearer dec-key");
   assert.deepEqual(calls[0]!.body.questions, [
@@ -263,7 +275,7 @@ test("systemone protocol posts to /systemone", async () => {
     }),
     fetch: fetchImpl,
   });
-  assert.deepEqual(await ask(backend, { provider: "ts", model: "jev-latest" }), { yes: 0.75, no: 0.25 });
+  assert.deepEqual(await ask(backend, { provider: "ts", model: "choice-model" }), { yes: 0.75, no: 0.25 });
   assert.equal(calls[0]!.url, "https://ts.example/v1/systemone");
 });
 
@@ -329,11 +341,11 @@ test("each hook point only accepts its own actions; use_runtime carries a runtim
         ) as { error: string }
       ).error,
     ),
-    /tool_response must be one of allow, block/,
+    /tool_response is not available yet/,
   );
 });
 
-test("most_confident hook points follow the likeliest enforced verdict and skip errored rules", async () => {
+test("most_confident hook points follow the likeliest enforced verdict and errored rules fall back to onError", async () => {
   const signal = new AbortController().signal;
   const goal = (id: string, model: string) => ({
     ...injection(),
@@ -357,5 +369,5 @@ test("most_confident hook points follow the likeliest enforced verdict and skip 
   assert.equal(both.decisive?.ruleId, "b");
   assert.equal(both.decisive?.action, "step_back");
   const failing = await runHook([goal("x", "down")], "goal_check", "{}", backend, signal);
-  assert.equal(failing.decisive, undefined, "a failed classifier leaves the built-in governor in charge");
+  assert.equal(failing.decisive?.action, "continue", "a failed classifier falls back to its onError option");
 });

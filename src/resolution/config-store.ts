@@ -273,8 +273,8 @@ export interface ScopedConfigStore {
   getAutoFlaggerConfig(): AutoFlaggerConfig | null;
   getDecisionRules(): readonly DecisionRule[];
   getDecisionProviders(): readonly DecisionProvider[];
-  setDecisionProviders(providers: DecisionProvider[]): void;
-  setDecisionRules(rules: DecisionRule[]): void;
+  setDecisionProviders(providers: DecisionProvider[]): Promise<void>;
+  setDecisionRules(rules: DecisionRule[]): Promise<void>;
   setAutoFlaggerConfig(config: AutoFlaggerConfig | null): void;
   getTurnWallClockSecDurable(id: ScopeId): Promise<number | null>;
   setTurnWallClockSec(id: ScopeId, sec: number | null): Promise<void>;
@@ -1139,20 +1139,20 @@ export function createMemoryConfigStore(
       }
     },
     getDecisionProviders: () => decisionProviders,
-    setDecisionProviders(providers) {
-      decisionProviders = providers;
-      persist(`decisionProviders:${org}`, "decision providers", () =>
+    async setDecisionProviders(providers) {
+      await writeQueue(`decisionProviders:${org}`, () =>
         providers.length
           ? decisionProvidersStore.put(org, { scopeId: org, providers })
           : decisionProvidersStore.delete(org),
       );
+      decisionProviders = providers;
     },
     getDecisionRules: () => decisionRules,
-    setDecisionRules(rules) {
-      decisionRules = rules;
-      persist(`decisionRules:${org}`, "decision rules", () =>
+    async setDecisionRules(rules) {
+      await writeQueue(`decisionRules:${org}`, () =>
         rules.length ? decisionRulesStore.put(org, { scopeId: org, rules }) : decisionRulesStore.delete(org),
       );
+      decisionRules = rules;
     },
     getTurnWallClockSecDurable: async (id) => (await turnWallClockStore.get(id))?.sec ?? null,
     async setTurnWallClockSec(id, sec) {

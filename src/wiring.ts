@@ -1,6 +1,7 @@
 import { createPostgresTeamStore, type TeamStore } from "./teams/teams.ts";
 import { brokerCredentialAuthHeader } from "./api/credential-broker.ts";
-import { createDecisionBackend, runHook, type DecisionBackend, type DecisionHook } from "./decisions/decisions.ts";
+import { decideHook, type DecisionBackend, type DecisionHook } from "./decisions/decisions.ts";
+import { createDecisionBackend } from "./decisions/providers.ts";
 import type { SlackSessionStatusState } from "./slack/session-status.ts";
 import { availableRuntimeError } from "./api/runtime-config.ts";
 import { createApprovalStore } from "./core/approval-store.ts";
@@ -1494,31 +1495,29 @@ export function buildApp(
       },
     });
   const DECISION_HOOK_TIMEOUT_MS = 5_000;
-  const decide = async (hook: DecisionHook, state: string, input: HarnessTurnInput) => {
-    const rules = configStore.getDecisionRules().filter((r) => r.hook === hook);
-    if (!rules.length) return undefined;
-    const signal = AbortSignal.any([
-      AbortSignal.timeout(DECISION_HOOK_TIMEOUT_MS),
-      ...(input.cancel ? [input.cancel] : []),
-    ]);
-    const { decisive, results } = await runHook(rules, hook, state, decisionBackend, signal);
-    for (const result of results)
-      auditLog.record({
-        at: Date.now(),
-        principalId: input.runtimeActorId ?? "system",
-        action: "decision.classify",
-        resource: result.ruleId,
-        scopeLabel: input.scopeLabel,
-        status: result.error ? "error" : result.action,
-        detail: JSON.stringify({
-          hook,
-          sessionId: input.session.id,
-          ...(input.runId ? { runId: input.runId } : {}),
-          ...result,
+  const decide = (hook: DecisionHook, state: string, input: HarnessTurnInput) =>
+    decideHook(
+      configStore.getDecisionRules(),
+      hook,
+      state,
+      decisionBackend,
+      () => AbortSignal.any([AbortSignal.timeout(DECISION_HOOK_TIMEOUT_MS), ...(input.cancel ? [input.cancel] : [])]),
+      (result) =>
+        auditLog.record({
+          at: Date.now(),
+          principalId: input.runtimeActorId ?? "system",
+          action: "decision.classify",
+          resource: result.ruleId,
+          scopeLabel: input.scopeLabel,
+          status: result.error ? "error" : result.action,
+          detail: JSON.stringify({
+            hook,
+            sessionId: input.session.id,
+            ...(input.runId ? { runId: input.runId } : {}),
+            ...result,
+          }),
         }),
-      });
-    return decisive;
-  };
+    );
   const judgeModelId = (): string => config.judgeModelId ?? auxiliaryModelFor(orgBaseModelId() ?? fallback.modelId);
   const hydrateModelCatalog = async (): Promise<unknown> => {
     await refreshModels();
@@ -1532,19 +1531,19 @@ export function buildApp(
         throw new Error(`Unsupported model: ${input.runtime.modelId}`);
       return { ...input.runtime, harnessId: input.runtime.harnessId, modelId: input.runtime.modelId };
     }
-    const choice = await resolveRuntimeChoiceDurable(
-      configStore,
-      runtimeOrgScope,
-      input.scopeLabel,
-      fallback,
-      input.runtime,
-      hydrateModelCatalog,
-      input.runtimePurpose,
-    );
-    if (input.runtime?.modelId || input.continueTurn) return choice;
+    const resolve = (requested: typeof input.runtime) =>
+      resolveRuntimeChoiceDurable(
+        configStore,
+        runtimeOrgScope,
+        input.scopeLabel,
+        fallback,
+        requested,
+        hydrateModelCatalog,
+        input.runtimePurpose,
+      );
+    if (input.runtime?.modelId || input.continueTurn) return resolve(input.runtime);
     const routed = (await decide("turn_start", input.input, input))?.runtime;
-    if (!routed || !modelSupportedByHarness(routed.modelId, choice.harnessId)) return choice;
-    return { ...choice, ...routed };
+    return resolve(routed ? { ...input.runtime, ...routed } : input.runtime);
   });
 
   if (config.securityScreen === "off" || config.securityScreenClassifier !== "model") {

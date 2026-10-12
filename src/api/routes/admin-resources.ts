@@ -228,7 +228,7 @@ export const ADMIN_RESOURCES: readonly AdminResource[] = [
         .config!.getDecisionRules()
         .find((r) => !parsed.providers.some((p) => p.id === r.model.provider));
       if (inUse) return { error: `decision rule ${inUse.id} still uses provider ${inUse.model.provider}` };
-      ctx.deps.config!.setDecisionProviders(parsed.providers);
+      await ctx.deps.config!.setDecisionProviders(parsed.providers);
       return { ok: true };
     },
   },
@@ -246,12 +246,12 @@ export const ADMIN_RESOURCES: readonly AdminResource[] = [
       if (bad) return bad;
       const body = ctx.body as { reset?: unknown; rules?: unknown };
       if (body.reset === true) {
-        ctx.deps.config!.setDecisionRules([]);
+        await ctx.deps.config!.setDecisionRules([]);
         return { ok: true };
       }
       const parsed = parseDecisionRules(body.rules, ctx.deps.config!.getDecisionProviders());
       if ("error" in parsed) return parsed;
-      ctx.deps.config!.setDecisionRules(parsed.rules);
+      await ctx.deps.config!.setDecisionRules(parsed.rules);
       return { ok: true };
     },
   },

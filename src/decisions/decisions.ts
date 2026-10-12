@@ -7,6 +7,7 @@ const DECISION_HOOK_POINTS = {
 export type DecisionHook = keyof typeof DECISION_HOOK_POINTS;
 type DecisionAction<H extends DecisionHook = DecisionHook> = (typeof DECISION_HOOK_POINTS)[H]["actions"][number];
 const DECISION_HOOKS = Object.keys(DECISION_HOOK_POINTS) as DecisionHook[];
+const LIVE_DECISION_HOOKS: readonly DecisionHook[] = ["turn_start"];
 const rank = (hook: DecisionHook, action: string) =>
   (DECISION_HOOK_POINTS[hook].actions as readonly string[]).indexOf(action);
 
@@ -58,7 +59,7 @@ export interface DecisionResult {
   error?: string;
 }
 
-interface DecisionQuestion {
+export interface DecisionQuestion {
   question: string;
   options: Record<string, string>;
 }
@@ -78,6 +79,7 @@ const MAX_RULES = 32;
 const MAX_OPTIONS = 8;
 const MAX_TEXT_CHARS = 500;
 const MAX_STATE_CHARS = 8_000;
+const MAX_RULE_TEXT_CHARS = 16_000;
 
 export function parseDecisionProviders(value: unknown): { providers: DecisionProvider[] } | { error: string } {
   if (!Array.isArray(value)) return { error: "decision providers must be an array" };
@@ -132,6 +134,8 @@ export function parseDecisionRules(
     ids.add(r.id);
     if (!DECISION_HOOKS.includes(r.hook as DecisionHook))
       return { error: `${r.id}: hook must be one of ${DECISION_HOOKS.join(", ")}` };
+    if (!LIVE_DECISION_HOOKS.includes(r.hook as DecisionHook))
+      return { error: `${r.id}: hook ${String(r.hook)} is not available yet; use ${LIVE_DECISION_HOOKS.join(", ")}` };
     if (typeof r.question !== "string" || !r.question.trim() || r.question.length > MAX_TEXT_CHARS)
       return { error: `${r.id}: question is required, at most ${MAX_TEXT_CHARS} characters` };
     if (r.mode !== "observe" && r.mode !== "enforce") return { error: `${r.id}: mode must be observe or enforce` };
@@ -151,8 +155,10 @@ export function parseDecisionRules(
       if ((o.action === "use_runtime") !== (rt !== undefined))
         return { error: `${r.id}.${key}: runtime is required with use_runtime and only allowed there` };
       if (
-        rt &&
-        (typeof rt.modelId !== "string" ||
+        rt !== undefined &&
+        (typeof rt !== "object" ||
+          rt === null ||
+          typeof rt.modelId !== "string" ||
           !rt.modelId.trim() ||
           (rt.effortLevel !== undefined && typeof rt.effortLevel !== "string") ||
           (rt.fastMode !== undefined && typeof rt.fastMode !== "boolean"))
@@ -192,6 +198,14 @@ export function parseDecisionRules(
       onError: r.onError,
     });
   }
+  const text = rules.reduce(
+    (n, r) => n + r.question.length + Object.values(r.options).reduce((m, o) => m + o.description.length, 0),
+    0,
+  );
+  if (text > MAX_RULE_TEXT_CHARS)
+    return {
+      error: `decision rules total ${text} characters of questions and options; at most ${MAX_RULE_TEXT_CHARS}`,
+    };
   return { rules };
 }
 
@@ -260,10 +274,24 @@ async function runGroup(
       signal,
     });
   } catch (error) {
-    return rules.map((r) => settle(r, error instanceof Error ? error : new Error(String(error))));
+    return rules.map((r) => settle(r, asError(error)));
   }
   return rules.map((r) => settle(r, answers[r.id]));
 }
+
+export const asError = (error: unknown): Error =>
+  error instanceof Error
+    ? error
+    : new Error(
+        `non-Error failure: ${(() => {
+          try {
+            return JSON.stringify(error)?.slice(0, 500) ?? String(error);
+          } catch {
+            return String(error);
+          }
+        })()}`,
+        { cause: error },
+      );
 
 export async function runHook(
   rules: readonly DecisionRule[],
@@ -279,180 +307,29 @@ export async function runHook(
   }
   const results = (await Promise.all([...groups.values()].map((g) => runGroup(g, state, backend, signal)))).flat();
   const confident = DECISION_HOOK_POINTS[hook].decide === "most_confident";
-  const weight = (r: DecisionResult) =>
-    confident && !r.error ? (r.probabilities[r.option] ?? 0) : rank(hook, r.action);
+  const weight = (r: DecisionResult) => {
+    if (!confident) return rank(hook, r.action);
+    return r.error ? -1 : (r.probabilities[r.option] ?? 0);
+  };
   let decisive: DecisionResult | undefined;
   for (const result of results) {
-    if (result.mode !== "enforce" || (confident && result.error)) continue;
+    if (result.mode !== "enforce") continue;
     if (!decisive || weight(result) > weight(decisive)) decisive = result;
   }
   return { ...(decisive ? { decisive } : {}), results };
 }
 
-const sample = (value: unknown) =>
-  String((typeof value === "string" ? value : JSON.stringify(value)) ?? value).slice(0, 500);
-
-function parseJson(text: string): Record<string, unknown> {
-  try {
-    return JSON.parse(text) as Record<string, unknown>;
-  } catch (error) {
-    throw new Error(`classifier returned invalid JSON: ${sample(text)}`, { cause: error });
-  }
-}
-
-function normalize(
-  probabilities: Record<string, unknown>,
-  options: Record<string, string>,
-  response: unknown,
-): Record<string, number> {
-  const out: Record<string, number> = {};
-  let total = 0;
-  for (const key of Object.keys(options)) {
-    const p = probabilities[key];
-    if (p !== undefined && (typeof p !== "number" || !Number.isFinite(p) || p < 0))
-      throw new Error(
-        `classifier returned an invalid probability for ${key}: ${String(JSON.stringify(p) ?? p).slice(0, 200)}`,
-      );
-    out[key] = p ?? 0;
-    total += p ?? 0;
-  }
-  if (total <= 0) throw new Error(`classifier returned no usable probabilities: ${sample(response)}`);
-  for (const key of Object.keys(out)) out[key] = out[key]! / total;
-  return out;
-}
-
-async function postJson(
-  fetchImpl: typeof fetch,
-  url: string,
-  headers: Record<string, string>,
-  body: unknown,
-  signal: AbortSignal,
+export async function decideHook(
+  rules: readonly DecisionRule[],
+  hook: DecisionHook,
+  state: string,
+  backend: DecisionBackend,
+  signal: () => AbortSignal,
+  record: (result: DecisionResult) => void,
 ) {
-  const response = await fetchImpl(url, {
-    method: "POST",
-    headers: { "content-type": "application/json", ...headers },
-    body: JSON.stringify(body),
-    redirect: "error",
-    signal,
-  });
-  const text = await response.text();
-  if (!response.ok) throw new Error(`classifier HTTP ${response.status}: ${text.slice(0, 300)}`);
-  return parseJson(text);
-}
-
-function choiceProbabilities(answer: unknown): Record<string, unknown> {
-  const a = (answer ?? {}) as { probabilities?: unknown };
-  if (Array.isArray(a.probabilities)) {
-    return Object.fromEntries(
-      (a.probabilities as { value?: unknown; probability?: unknown }[]).map((p) => [String(p.value), p.probability]),
-    );
-  }
-  return (a.probabilities ?? {}) as Record<string, unknown>;
-}
-
-type Questions = Record<string, DecisionQuestion>;
-const typesafeQuestions = (questions: Questions) =>
-  Object.fromEntries(
-    Object.entries(questions).map(([k, q]) => [k, { type: "choice", instructions: q.question, criteria: q.options }]),
-  );
-const byKey = (answers: unknown) => (k: string) => ((answers ?? {}) as Record<string, unknown>)[k];
-
-const PROTOCOLS: Record<
-  DecisionProvider["protocol"],
-  {
-    path: string;
-    request: (model: string, questions: Questions, state: string) => unknown;
-    answers: (body: Record<string, unknown>) => (key: string) => unknown;
-  }
-> = {
-  decisions: {
-    path: "/decisions",
-    request: (model, questions, state) => ({
-      model,
-      input: state,
-      questions: Object.entries(questions).map(([name, q]) => ({
-        type: "choice",
-        name,
-        instructions: q.question,
-        choices: Object.entries(q.options).map(([value, description]) => ({ value, description })),
-      })),
-    }),
-    answers: (body) => (k) => ((body.answers as { name?: string }[] | undefined) ?? []).find((a) => a.name === k),
-  },
-  systemone: {
-    path: "/systemone",
-    request: (model, questions, state) => ({ state, model, questions: typesafeQuestions(questions) }),
-    answers: (body) => byKey(body.answers),
-  },
-  "chat-completions": {
-    path: "/chat/completions",
-    request: (model, questions, state) => ({
-      model,
-      messages: [],
-      typesafe: { questions: typesafeQuestions(questions), state },
-    }),
-    answers: (body) => {
-      const content = (body.choices as { message?: { content?: string } }[] | undefined)?.[0]?.message?.content;
-      if (typeof content !== "string") throw new Error(`classifier returned no message content: ${sample(body)}`);
-      const parsed = parseJson(content);
-      return byKey(parsed.answers ?? parsed);
-    },
-  },
-};
-
-export function createDecisionBackend(opts: {
-  providers: () => readonly DecisionProvider[];
-  gateway?: { url: string; apiKey: string; apiKeyHeader?: string };
-  credential: (slug: string) => Promise<{ host: string; enabled: boolean; header: [string, string] } | null>;
-  fetch?: typeof fetch;
-}): DecisionBackend {
-  const fetchImpl = opts.fetch ?? fetch;
-  const endpoint = async (provider: DecisionProvider): Promise<{ base: string; auth: Record<string, string> }> => {
-    if (!provider.baseUrl) {
-      if (!opts.gateway) throw new Error(`decision provider ${provider.id}: no model gateway is configured`);
-      const header = opts.gateway.apiKeyHeader;
-      return {
-        base: opts.gateway.url.replace(/\/$/, ""),
-        auth: header ? { [header]: opts.gateway.apiKey } : { authorization: `Bearer ${opts.gateway.apiKey}` },
-      };
-    }
-    const rec = await opts.credential(provider.credential!);
-    if (!rec?.enabled)
-      throw new Error(`decision provider ${provider.id}: credential ${provider.credential} is missing or disabled`);
-    const url = new URL(provider.baseUrl);
-    if (url.host !== rec.host)
-      throw new Error(
-        `decision provider ${provider.id}: credential ${provider.credential} is for ${rec.host}, not ${url.host}`,
-      );
-    return { base: provider.baseUrl.replace(/\/$/, ""), auth: { [rec.header[0]]: rec.header[1] } };
-  };
-  return {
-    async choose({ questions, state, model, signal }) {
-      const provider = opts.providers().find((p) => p.id === model.provider);
-      if (!provider) throw new Error(`decision provider ${model.provider} is not configured`);
-      const { base, auth } = await endpoint(provider);
-      const keys = Object.keys(questions);
-      const wire = PROTOCOLS[provider.protocol];
-      const body = await postJson(
-        fetchImpl,
-        `${base}${wire.path}`,
-        auth,
-        wire.request(model.model, questions, state),
-        signal,
-      );
-      const answers = wire.answers(body);
-      return Object.fromEntries(
-        keys.map((k) => {
-          try {
-            const answer = answers(k);
-            if ((answer as { type?: string } | undefined)?.type === "refusal")
-              throw new Error(`decision provider refused: ${sample(answer)}`);
-            return [k, normalize(choiceProbabilities(answer), questions[k]!.options, body)];
-          } catch (error) {
-            return [k, error instanceof Error ? error : new Error(String(error))];
-          }
-        }),
-      );
-    },
-  };
+  const matching = rules.filter((r) => r.hook === hook);
+  if (!matching.length) return undefined;
+  const { decisive, results } = await runHook(matching, hook, state, backend, signal());
+  for (const result of results) record(result);
+  return decisive;
 }
