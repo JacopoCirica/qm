@@ -1,6 +1,6 @@
+import { createPostgresTeamStore, type TeamStore } from "./teams/teams.ts";
 import { brokerCredentialAuthHeader } from "./api/credential-broker.ts";
 import { createDecisionBackend, runHook, type DecisionBackend, type DecisionHook } from "./decisions/decisions.ts";
-import type { GovernorVerdict } from "./harness/goal.ts";
 import type { SlackSessionStatusState } from "./slack/session-status.ts";
 import { availableRuntimeError } from "./api/runtime-config.ts";
 import { createApprovalStore } from "./core/approval-store.ts";
@@ -545,6 +545,7 @@ export interface BuiltApp {
   files: FileArtifactStore;
   fileUploads?: DirectFileUploads;
   featureFlags: FeatureFlagStore;
+  teams?: TeamStore;
   replayDedupe?: ReplayDedupe;
   brokerSessions?: BrokerSessionStore;
   directory: DirectoryStore;
@@ -710,6 +711,9 @@ export function buildApp(
   const skillPacks = createSkillPackStore({ backing: artifactMap<SkillPack>("skill_packs") });
   const skillBundles = createSkillBundleStore({ backing: artifactMap<SkillBundle>("skill_bundles") });
   const featureFlags = createFeatureFlagStore(artifactMap<FeatureFlagRecord>("feature_flags"));
+  const teams = config.databaseUrl
+    ? createPostgresTeamStore(config.databaseUrl, featureFlags, scopeId("org", config.orgId))
+    : undefined;
   const connectorStatusCache = createConnectorStatusCache(artifactMap<ConnectorStatusRecord>("connector_status"));
   const slackInstallation = createSlackInstallationStore(
     config.orgId,
@@ -1521,40 +1525,27 @@ export function buildApp(
     if (!(await modelCredentials.availability()).openrouter) return undefined;
     return selectableModelCatalog(overrides.modelCredentialFetch);
   };
-  const harness = createHarnessRouter(
-    adapters,
-    adapters.get(fallbackHarness)!,
-    async (input) => {
-      await refreshModels();
-      if (input.runtimePinned && input.runtime?.harnessId && input.runtime.modelId) {
-        if (!modelSupportedByHarness(input.runtime.modelId, input.runtime.harnessId))
-          throw new Error(`Unsupported model: ${input.runtime.modelId}`);
-        return { ...input.runtime, harnessId: input.runtime.harnessId, modelId: input.runtime.modelId };
-      }
-      const choice = await resolveRuntimeChoiceDurable(
-        configStore,
-        runtimeOrgScope,
-        input.scopeLabel,
-        fallback,
-        input.runtime,
-        hydrateModelCatalog,
-        input.runtimePurpose,
-      );
-      if (input.runtime?.modelId || input.continueTurn) return choice;
-      const routed = (await decide("turn_start", input.input, input))?.runtime;
-      if (!routed || !modelSupportedByHarness(routed.modelId, choice.harnessId)) return choice;
-      return { ...choice, ...routed };
-    },
-    async (input, goal) => {
-      const decisive = await decide("goal_check", JSON.stringify(goal), input);
-      if (!decisive) return undefined;
-      const verdict = decisive.action as GovernorVerdict["verdict"];
-      return {
-        verdict: verdict === "complete" && goal.trigger !== "completion" ? "continue" : verdict,
-        reasons: decisive.message ?? `decision ${decisive.ruleId}: ${decisive.option}`,
-      };
-    },
-  );
+  const harness = createHarnessRouter(adapters, adapters.get(fallbackHarness)!, async (input) => {
+    await refreshModels();
+    if (input.runtimePinned && input.runtime?.harnessId && input.runtime.modelId) {
+      if (!modelSupportedByHarness(input.runtime.modelId, input.runtime.harnessId))
+        throw new Error(`Unsupported model: ${input.runtime.modelId}`);
+      return { ...input.runtime, harnessId: input.runtime.harnessId, modelId: input.runtime.modelId };
+    }
+    const choice = await resolveRuntimeChoiceDurable(
+      configStore,
+      runtimeOrgScope,
+      input.scopeLabel,
+      fallback,
+      input.runtime,
+      hydrateModelCatalog,
+      input.runtimePurpose,
+    );
+    if (input.runtime?.modelId || input.continueTurn) return choice;
+    const routed = (await decide("turn_start", input.input, input))?.runtime;
+    if (!routed || !modelSupportedByHarness(routed.modelId, choice.harnessId)) return choice;
+    return { ...choice, ...routed };
+  });
 
   if (config.securityScreen === "off" || config.securityScreenClassifier !== "model") {
     delete harness.models.screenSecurity;
@@ -1797,8 +1788,8 @@ export function buildApp(
     isActiveMember: (principalId) => identity.isInternal(identity.classify(principalId)),
     advisoryLock,
   });
-  const canReadScope = createCanReadScope({ managedGroups: projects, directory, identity, sessions });
-  const canWriteScope = createCanWriteScope({ managedGroups: projects, directory, identity });
+  const canReadScope = createCanReadScope({ managedGroups: projects, directory, identity, teams, sessions });
+  const canWriteScope = createCanWriteScope({ managedGroups: projects, directory, identity, teams });
   const canManageScope = createCanManageScope({ managedGroups: projects, directory, identity, sessions });
   const managesArtifactHome = createManagesArtifactHome({ managedGroups: projects, directory }, canManageScope);
   const currentScopeMembers = createCurrentScopeMembers({ managedGroups: projects, directory, identity });
@@ -2047,7 +2038,6 @@ export function buildApp(
     turnLeaseWaitMs: config.turnLeaseWaitMs,
     securityScreenTimeoutMs: config.securityScreenTimeoutMs,
     ...(securityScreener ? { securityScreener } : {}),
-    decisionBackend,
     backgroundJobTtlMs: config.backgroundJobTtlMs,
     backgroundJobTtlMaxMs: config.backgroundJobTtlMaxMs,
     sandboxCapabilityTtlMs: config.sandboxCapabilityTtlMs,
@@ -2077,6 +2067,7 @@ export function buildApp(
     tasks,
     blobTransfer,
     featureFlags,
+    teams,
     credentialUsage,
     connectorStatusCache,
     resolveConnectorClient: resolveClient,
@@ -2966,6 +2957,7 @@ export function buildApp(
     files,
     ...(fileUploads ? { fileUploads } : {}),
     featureFlags,
+    teams,
     ...(replayDedupe ? { replayDedupe } : {}),
     ...(brokerSessions ? { brokerSessions } : {}),
     directory,
@@ -3125,7 +3117,9 @@ export function serverDeps(
       ? {
           loopSourceTokens: built.keychain,
           inboxSourceRefresh: createInboxSourceRefresh({
+            featureFlags: built.featureFlags,
             items: built.loops.items,
+            errors: built.errors,
             tokens: built.keychain,
             ...(config.slack?.apiUrl ? { slackApiUrl: config.slack.apiUrl } : {}),
           }),

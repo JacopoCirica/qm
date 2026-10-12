@@ -1,3 +1,4 @@
+import { scopeTeamsToTurn } from "../teams/teams.ts";
 import { externalSlackRequestAllowed, currentExternalSlackRun } from "../resolution/external-slack.ts";
 import { externalTools } from "./orchestrator/external-tools.ts";
 import { memoryBoundedEntries, memoryContextPayload, nextMemoryContext } from "../memory/context-boundary.ts";
@@ -203,7 +204,7 @@ import {
 } from "./orchestrator/prompt-blocks.ts";
 import { createCompaction } from "./orchestrator/compaction.ts";
 import { startLeaseKeepalive } from "./orchestrator/lease-keepalive.ts";
-import { createSecurityClassifier, screeningAvailable } from "./orchestrator/security-screen.ts";
+import { createSecurityClassifier } from "./orchestrator/security-screen.ts";
 import { createTurnSandboxes } from "./orchestrator/sandboxes.ts";
 import type { EgressPolicy } from "../types.ts";
 import { isOpenScopeMember } from "../resolution/sharing-access.ts";
@@ -453,7 +454,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         });
         return "block";
       };
-      if (!screeningAvailable(deps, "user_input")) return block("no-screener");
+      if (!deps.securityScreener && !deps.harness.models.screenSecurity) return block("no-screener");
       if (!(await deps.rateLimiter.check(actor.id)).allowed) return block("rate-limited");
       if (deps.budget && !(await deps.budget.check(actor.id)).allowed) return block("over-budget");
       if (securitySteersInFlight.has(conversation.threadRef)) return block("steer-in-flight");
@@ -541,6 +542,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         input = { ...input, model: undefined, harness: undefined, thinkingLevel: undefined, fastMode: undefined };
       const swarmEntryProvenance = input.swarm ? { origin: "automation", swarm: input.swarm } : {};
       await deps.refreshModels?.();
+      input = await scopeTeamsToTurn(input, deps, external);
       const { actor, conversation } = input;
       const automatedTurn = input.origin.kind === "automation";
       const ambientTurn = input.origin.kind === "ambient";
@@ -876,7 +878,10 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         screenedOverheard = inbound.overheard;
         const { hasUnscreenableAttachment, externalPromptData, screenPayload } = inbound;
         if (screenPayload || hasUnscreenableAttachment) {
-          const canScreenText = !!screenPayload && !screenPayload.truncated && screeningAvailable(deps, "user_input");
+          const canScreenText =
+            !!screenPayload &&
+            !screenPayload.truncated &&
+            (!!deps.securityScreener || !!deps.harness.models.screenSecurity);
           const verdict = canScreenText
             ? await classifySecurityData(screenPayload!.content, actor.id, scopeId, recordScreenRequest, {
                 ...screenTrace,
@@ -888,7 +893,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           let unscreenableCause: "unscreenable-attachment" | "oversize-input" | "no-screener" | undefined;
           if (hasUnscreenableAttachment || !screenPayload) unscreenableCause = "unscreenable-attachment";
           else if (screenPayload.truncated) unscreenableCause = "oversize-input";
-          else if (!screeningAvailable(deps, "user_input")) unscreenableCause = "no-screener";
+          else if (!deps.securityScreener && !deps.harness.models.screenSecurity) unscreenableCause = "no-screener";
           if (verdict?.decision === "strict") {
             const sources = externalPromptData.map((item) => item.source);
             flaggedScreenedInput = {
@@ -2866,7 +2871,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
                 blobTransfer,
                 fileRegistration,
                 turnInboxDir,
-                securityPolicy.screening !== "off" && screeningAvailable(deps, "tool_response")
+                securityPolicy.screening !== "off" && (deps.securityScreener || deps.harness.models.screenSecurity)
                   ? ({ content }) =>
                       classifySecurityData(content, actor.id, scopeId, undefined, {
                         ...screenTrace,
@@ -3112,7 +3117,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           if (securityPolicy.screening !== "off") {
             for (const document of documentInputs.documents.slice()) {
               documentsUnscreened ||= !isTextDocument(document);
-              if (!screeningAvailable(deps, "tool_response")) {
+              if (!(deps.securityScreener || deps.harness.models.screenSecurity)) {
                 documentsUnscreened = true;
                 continue;
               }

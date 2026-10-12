@@ -12,9 +12,6 @@ import {
 } from "../src/decisions/decisions.ts";
 
 const PROVIDERS: DecisionProvider[] = [{ id: "gw", protocol: "chat-completions" }];
-import { buildApp } from "../src/wiring.ts";
-import { testConfig } from "./support/test-config.ts";
-import { selectDefaultSandbox } from "./support/default-sandbox.ts";
 
 const injection = (over: Partial<DecisionRule> = {}): DecisionRule => ({
   id: "injection",
@@ -288,42 +285,6 @@ test("a missing, disabled or mismatched credential is an error, so the rule fall
   await assert.rejects(ask(backend(null), { provider: "gone", model: "x" }), /not configured/);
   const noGateway = createDecisionBackend({ providers: () => PROVIDERS, credential: async () => null });
   await assert.rejects(ask(noGateway, { provider: "gw", model: "m" }), /no model gateway/);
-});
-
-test("a decision rule on tool_response quarantines tool output end to end", async () => {
-  const states: string[] = [];
-  const built = buildApp(testConfig({ securityPosture: "auto", securityScreen: "enforce" }), {
-    decisionBackend: {
-      async choose({ state }) {
-        states.push(state);
-        return { injection: /zebra/.test(state) ? { yes: 0.97, no: 0.03 } : { yes: 0.02, no: 0.98 } };
-      },
-    },
-  });
-  built.config.setDecisionProviders(PROVIDERS);
-  built.config.setDecisionRules([injection()]);
-  await selectDefaultSandbox(built, "U1", "personal:U1");
-  const turn = (text: string, n: string) =>
-    built.app.turn({
-      surface: "web",
-      actor: { externalId: "U1" },
-      conversation: { kind: "dm", threadRef: `decisions-${n}` },
-      text,
-      liveActor: true,
-    });
-  const bad = await turn("!screened-run printf 'zebra crossing'", "a");
-  assert.match(
-    bad.reply ?? "",
-    /quarantined by the security screen/,
-    "the rule, not the built-in screen, flagged harmless-looking text",
-  );
-  const good = await turn("!screened-run printf 'hello world'", "b");
-  assert.doesNotMatch(good.reply ?? "", /quarantined/);
-  assert.ok(states.length >= 2, "the rule saw each tool output");
-
-  built.config.setDecisionRules([]);
-  const control = await turn("!screened-run printf 'zebra crossing'", "c");
-  assert.doesNotMatch(control.reply ?? "", /quarantined/, "without the rule the same output passes");
 });
 
 test("each hook point only accepts its own actions; use_runtime carries a runtime", () => {

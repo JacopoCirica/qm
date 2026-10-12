@@ -13,7 +13,6 @@ import { swallowAs } from "../../util/errors.ts";
 import { sleep } from "../../util/async.ts";
 import { headSlice } from "../../util/text.ts";
 import type { OrchestratorDeps } from "./types.ts";
-import { runHook, type DecisionHook } from "../../decisions/decisions.ts";
 
 const DEFAULT_SECURITY_SCREEN_TIMEOUT_MS = 15_000;
 const MAX_SCREEN_REQUEST_CHARS = 2_000;
@@ -62,23 +61,14 @@ function screenSources(payload: string): string[] {
   return [...new Set(sources)].slice(0, MAX_AUDITED_SOURCES);
 }
 
-function screenRules(deps: OrchestratorDeps, hook: DecisionHook) {
-  return deps.decisionBackend ? (deps.config?.getDecisionRules?.() ?? []).filter((r) => r.hook === hook) : [];
-}
-
-export function screeningAvailable(deps: OrchestratorDeps, hook: DecisionHook): boolean {
-  return !!deps.securityScreener || !!deps.harness.models.screenSecurity || screenRules(deps, hook).length > 0;
-}
-
 export function createSecurityClassifier(deps: OrchestratorDeps): SecurityClassifier {
   return async function classifySecurityData(payload, actorId, scopeLabel, recordLlmRequest, context) {
     const screener = deps.securityScreener;
     const model = deps.harness.models.screenSecurity;
     const observe = context.mode === "observe";
-    const hook = context.hook ?? "user_input";
-    const rules = screenRules(deps, hook);
-    if (!screener && !model && !rules.length) return observe ? { decision: "auto" } : undefined;
+    if (!screener && !model) return observe ? { decision: "auto" } : undefined;
     const timeoutMs = deps.securityScreenTimeoutMs ?? DEFAULT_SECURITY_SCREEN_TIMEOUT_MS;
+    const hook = context.hook ?? "user_input";
     let request: { origin: string; text: string; truncated: boolean } | undefined;
     if (hook === "tool_response" && context.request?.trim()) {
       request = {
@@ -93,7 +83,7 @@ export function createSecurityClassifier(deps: OrchestratorDeps): SecurityClassi
         at: Date.now(),
         principalId: actorId,
         action: "security_screen.classify",
-        resource: rules.length ? "decision-rules" : (screener?.provider ?? "model"),
+        resource: screener?.provider ?? "model",
         scopeLabel,
         status,
         detail: JSON.stringify({
@@ -114,28 +104,6 @@ export function createSecurityClassifier(deps: OrchestratorDeps): SecurityClassi
     };
 
     const screenOnce = async (requestId: string, signal: AbortSignal): Promise<Screened | undefined> => {
-      if (rules.length) {
-        const state = request ? JSON.stringify({ request, payload }) : payload;
-        const outcome = await runHook(rules, hook, state, deps.decisionBackend!, signal);
-        for (const result of outcome.results) {
-          deps.auditLog.record({
-            at: Date.now(),
-            principalId: actorId,
-            action: "decision.classify",
-            resource: result.ruleId,
-            scopeLabel,
-            status: result.error ? "error" : result.action,
-            detail: JSON.stringify({ hook, requestId, ...result }),
-          });
-        }
-        const decisive = outcome.decisive;
-        return {
-          verdict:
-            decisive?.action === "block"
-              ? { decision: "strict", reason: decisive.message ?? `decision:${decisive.ruleId}:${decisive.option}` }
-              : { decision: "auto" },
-        };
-      }
       if (screener) {
         return screener.classify({
           payload,

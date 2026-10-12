@@ -1,4 +1,3 @@
-import type { DecisionBackend } from "../../decisions/decisions.ts";
 import type { ExternalSlackPolicies } from "../../resolution/external-slack.ts";
 import type { RuntimeService } from "../../harness/runtime-types.ts";
 import type { SandboxResources } from "../../sandbox/sandbox-resources.ts";
@@ -33,6 +32,7 @@ import type { CronStore } from "../../cron/cron-store.ts";
 import type { WebhookStore } from "../../webhooks/webhook-store.ts";
 import type { ConnectorTokenStore, Keychain, ServiceCredentialStore } from "../../credentials/keychain.ts";
 import type { FeatureFlagStore } from "../../feature-flags.ts";
+import type { TeamStore } from "../../teams/teams.ts";
 import type { CredentialUsageSink } from "../../admin/credential-usage-sink.ts";
 import type { ConnectorStatusCache } from "../../credentials/connector-status.ts";
 import type { ModelGateway } from "../../model/model-gateway.ts";
@@ -142,7 +142,6 @@ export interface OrchestratorDeps {
   turnLeaseWaitMs?: number;
   securityScreenTimeoutMs?: number;
   securityScreener?: SecurityScreener;
-  decisionBackend?: DecisionBackend;
   backgroundJobTtlMs?: number;
   sandboxCapabilityTtlMs?: number;
   backgroundJobTtlMaxMs?: number;
@@ -193,6 +192,7 @@ export interface OrchestratorDeps {
   resolveConnectorClient?: OAuthClientResolver;
   scratchExec?: boolean;
   featureFlags?: FeatureFlagStore;
+  teams?: TeamStore;
   credentialUsage?: CredentialUsageSink;
   keychain?: Keychain;
   serviceCreds?: ServiceCredentialStore;

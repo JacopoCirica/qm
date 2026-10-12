@@ -75,7 +75,9 @@ export interface DecisionBackend {
 const RULE_ID = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const MAX_RULES = 32;
-const MAX_STATE_CHARS = 16_000;
+const MAX_OPTIONS = 8;
+const MAX_TEXT_CHARS = 500;
+const MAX_STATE_CHARS = 8_000;
 
 export function parseDecisionProviders(value: unknown): { providers: DecisionProvider[] } | { error: string } {
   if (!Array.isArray(value)) return { error: "decision providers must be an array" };
@@ -130,7 +132,8 @@ export function parseDecisionRules(
     ids.add(r.id);
     if (!DECISION_HOOKS.includes(r.hook as DecisionHook))
       return { error: `${r.id}: hook must be one of ${DECISION_HOOKS.join(", ")}` };
-    if (typeof r.question !== "string" || !r.question.trim()) return { error: `${r.id}: question is required` };
+    if (typeof r.question !== "string" || !r.question.trim() || r.question.length > MAX_TEXT_CHARS)
+      return { error: `${r.id}: question is required, at most ${MAX_TEXT_CHARS} characters` };
     if (r.mode !== "observe" && r.mode !== "enforce") return { error: `${r.id}: mode must be observe or enforce` };
     if (typeof r.options !== "object" || r.options === null || Array.isArray(r.options))
       return { error: `${r.id}: options must be an object` };
@@ -138,7 +141,7 @@ export function parseDecisionRules(
     for (const [key, opt] of Object.entries(r.options as Record<string, unknown>)) {
       if (!ID.test(key)) return { error: `${r.id}: option ${key} must match ${ID}` };
       const o = opt as Record<string, unknown> | null;
-      if (typeof o?.description !== "string" || !o.description.trim())
+      if (typeof o?.description !== "string" || !o.description.trim() || o.description.length > MAX_TEXT_CHARS)
         return { error: `${r.id}.${key}: description is required` };
       const allowed = DECISION_HOOK_POINTS[r.hook as DecisionHook].actions as readonly string[];
       if (!allowed.includes(o.action as string))
@@ -170,7 +173,8 @@ export function parseDecisionRules(
           : {}),
       };
     }
-    if (Object.keys(options).length < 2) return { error: `${r.id}: at least two options are required` };
+    const count = Object.keys(options).length;
+    if (count < 2 || count > MAX_OPTIONS) return { error: `${r.id}: needs 2 to ${MAX_OPTIONS} options` };
     if (typeof r.onError !== "string" || !(r.onError in options))
       return { error: `${r.id}: onError must name one of its options` };
     const m = (r.model ?? {}) as Record<string, unknown>;
@@ -353,7 +357,6 @@ const typesafeQuestions = (questions: Questions) =>
   );
 const byKey = (answers: unknown) => (k: string) => ((answers ?? {}) as Record<string, unknown>)[k];
 
-/** Each wire protocol maps one request/response shape onto questions in, per-option probabilities out. */
 const PROTOCOLS: Record<
   DecisionProvider["protocol"],
   {
