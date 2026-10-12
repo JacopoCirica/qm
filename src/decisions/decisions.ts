@@ -214,6 +214,7 @@ export const decisionCatalog = () => ({
   hooks: LIVE_DECISION_HOOKS.map((id) => ({ id, actions: DECISION_HOOK_POINTS[id].actions })),
   protocols: DECISION_PROTOCOLS,
   modes: DECISION_MODES,
+  maxOptions: MAX_OPTIONS,
 });
 
 function pick(rule: DecisionRule, probabilities: Record<string, number>): string {

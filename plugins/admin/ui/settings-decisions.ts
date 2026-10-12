@@ -230,6 +230,7 @@ function ruleForm() {
         </fieldset>`,
     )}
     <button
+      ?disabled=${d.options.length >= state.data.maxOptions}
       @click=${() => (
         d.options.push({
           key: "",
@@ -254,6 +255,7 @@ function ruleForm() {
     <div>
       <button class="primary" ?disabled=${state.saving} @click=${() => saveRule(ruleBody(d))}>Save rule</button>
       <button @click=${() => ((state.rule = null), redraw())}>Cancel</button>
+      <span class="status">${state.messageAt === "rule" ? state.message : ""}</span>
     </div>
   </div>`;
 }
@@ -326,7 +328,7 @@ function template() {
                 @click=${() => ((state.rule = blankRule()), showRule())}
               >
                 + Add rule</button
-              ><span class="status">${state.messageAt === "provider" ? "" : state.message}</span>
+              ><span class="status">${state.messageAt === "provider" || state.rule ? "" : state.message}</span>
             </div>`
         : ""
     }
