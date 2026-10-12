@@ -10,6 +10,7 @@ const state = {
   rule: null as any,
   saving: false,
   message: "",
+  providerStatus: false,
 };
 let redraw = () => {};
 export function configureDecisions(options: any) {
@@ -34,6 +35,7 @@ const option = (key: string, o: any, hook: string) => ({
 function ruleForm(r: any) {
   const hook = r?.hook || state.data.hooks[0]?.id || "";
   return {
+    editing: !!r,
     id: r?.id || "",
     hook,
     question: r?.question || "",
@@ -79,6 +81,7 @@ function ruleBody(d: any) {
   };
 }
 async function send(body: any, done: () => void) {
+  state.providerStatus = !!body.provider;
   state.saving = true;
   state.message = "Saving…";
   redraw();
@@ -119,9 +122,10 @@ function remove(kind: "Provider" | "Rule", id: string) {
   const key = kind === "Provider" ? "providers" : "rules";
   void send({ [`remove${kind}`]: id }, () => (state.data[key] = state.data[key].filter((x: any) => x.id !== id)));
 }
-const field = (label: string, value: string, set: (v: string) => void, hint = "") =>
+const field = (label: string, value: string, set: (v: string) => void, hint = "", locked = false) =>
   html`<label
     >${label}<input
+      ?disabled=${locked}
       .value=${value}
       placeholder=${hint}
       @input=${(e: Event) => set((e.target as HTMLInputElement).value)}
@@ -165,7 +169,7 @@ function ruleEditor() {
   const d = state.rule;
   const set = (key: string) => (v: string) => (d[key] = v);
   return html`<div class="decision-form decision-rule">
-    ${field("Rule id", d.id, set("id"), "e.g. hard-tasks")}
+    ${field("Rule id", d.id, set("id"), "e.g. hard-tasks", d.editing)}
     ${select(
       "Hook",
       d.hook,
@@ -218,6 +222,7 @@ function template() {
                 ${field("Base URL", p.baseUrl, (v) => (p.baseUrl = v), "blank uses the model gateway")}
                 ${field("Credential", p.credential, (v) => (p.credential = v), "org service credential")}
                 <button ?disabled=${state.saving || !p.id} @click=${saveProvider}>Save provider</button>
+                <span class="status">${state.providerStatus ? state.message : ""}</span>
               </div>
               <h3>Rules</h3>
               ${data.rules.map((r: any) =>
@@ -236,7 +241,7 @@ function template() {
                 @click=${() => openRule(null)}
               >
                 + Add rule</button
-              ><span class="status">${state.message}</span>
+              ><span class="status">${state.providerStatus ? "" : state.message}</span>
             </div>`
         : ""
     }
