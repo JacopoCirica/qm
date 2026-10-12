@@ -28,7 +28,7 @@ function accounting(n: number): string {
 }
 
 /** EUR to USD in integer cents with half-cents rounded up, so the key never depends on floating-point luck. */
-export function eurToUsd(eur: number, rate: number): number {
+function eurToUsd(eur: number, rate: number): number {
   const product = Math.round(eur * 100) * Math.round(rate * 100);
   return Math.floor((product + 50) / 100) / 100;
 }
