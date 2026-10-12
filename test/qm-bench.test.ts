@@ -109,3 +109,25 @@ test("parseVariants keeps each positive integer once, in the order first given",
   const ids = buildCases(tasks.slice(0, 1), parseVariants("1,1")).map((c) => c.id);
   assert.deepEqual(ids, [`${tasks[0]!.id}-1`]);
 });
+
+test("network-find-peers: the gold answer names people as the directory spells them", () => {
+  const task = tasks.find((t) => t.id === "network-find-peers")!;
+  for (const seed of seeds) {
+    const fixture = task.generate(seed);
+    const founders = fixture.files["directory/founders.csv"]!;
+    const alumni = fixture.files["directory/alumni.json"]!;
+    const peers = JSON.parse(goldOutputs(task, fixture)["output/peers.json"]!) as Array<{
+      name: string;
+      company: string;
+    }>;
+    assert.ok(peers.length > 0);
+    for (const { name, company } of peers) {
+      const [first, last] = name.split(" ") as [string, string];
+      const spellings = [name, `${first[0]}. ${last}`, `${last}, ${first}`, name.toUpperCase()];
+      const listed = founders.includes(`\n${name},`) || spellings.some((s) => alumni.includes(`"name": "${s}"`));
+      assert.ok(listed, `${name} is not in the directory`);
+      const known = founders.includes(`,${company},`) || alumni.includes(`"company": "${company}"`);
+      assert.ok(known, `${company} is not a directory company`);
+    }
+  }
+});

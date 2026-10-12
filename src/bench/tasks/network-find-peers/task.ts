@@ -21,20 +21,16 @@ export function task(): BenchTask {
   });
 }
 
-/** Reference answer: up to five eligible people, same-city first, why quoting their phrase. */
+/** Reference answer: up to five eligible people by directory name, same-city first, why quoting their phrase. */
 export function gold(f: Fixture<PeersKey>): Record<string, string> {
   const preferred = new Set(f.key.preferred);
   const ranked = [...f.key.eligible].sort((a, b) => Number(preferred.has(b)) - Number(preferred.has(a))).slice(0, 5);
   return {
     "output/peers.json": JSON.stringify(
-      ranked.map((k) => {
-        const [last, company] = k.split("|") as [string, string];
-        return {
-          name: `X ${last[0]!.toUpperCase()}${last.slice(1)}`,
-          company,
-          why: `Same sector; their profile lists "${f.key.phraseOf[k]}"`,
-        };
-      }),
+      ranked.map((k) => ({
+        ...f.key.personOf[k]!,
+        why: `Same sector; their profile lists "${f.key.phraseOf[k]}"`,
+      })),
     ),
   };
 }
