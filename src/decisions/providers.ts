@@ -11,7 +11,6 @@ async function readCapped(response: Response): Promise<string> {
       const prefix = Buffer.concat([...chunks, Buffer.from(chunk.subarray(0, 300))])
         .subarray(0, 300)
         .toString("utf8");
-      await response.body?.cancel();
       throw new Error(`classifier HTTP ${response.status}: response over ${MAX_RESPONSE_BYTES} bytes: ${prefix}`);
     }
     size += chunk.byteLength;

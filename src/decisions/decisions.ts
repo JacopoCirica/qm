@@ -199,6 +199,14 @@ export function parseDecisionRules(
       onError: r.onError,
     });
   }
+  const confidentHook = rules.find(
+    (r, i) =>
+      r.mode === "enforce" &&
+      DECISION_HOOK_POINTS[r.hook].decide === "most_confident" &&
+      rules.some((o, j) => j < i && o.hook === r.hook && o.mode === "enforce"),
+  );
+  if (confidentHook)
+    return { error: `${confidentHook.id}: ${confidentHook.hook} allows one enforcing rule; set the others to observe` };
   const text = rules.reduce(
     (n, r) => n + r.question.length + Object.values(r.options).reduce((m, o) => m + o.description.length, 0),
     0,
