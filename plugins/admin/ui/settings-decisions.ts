@@ -2,7 +2,7 @@ import { mountTemplate } from "./shared.ts";
 import { html } from "lit";
 import { classMap } from "lit/directives/class-map.js";
 let config: any;
-const NEW_PROVIDER = { id: "", protocol: "chat-completions", baseUrl: "", credential: "" };
+const NEW_PROVIDER = { id: "", protocol: "chat-completions", baseUrl: "", credential: "", editing: false };
 const state = {
   scope: "",
   data: null as any,
@@ -218,16 +218,17 @@ function template() {
               ${data.providers.map((x: any) =>
                 row(
                   `${x.id}: ${x.protocol}${x.baseUrl ? ` · ${x.baseUrl} · ${x.credential}` : " · model gateway"}`,
-                  () => ((state.provider = { ...NEW_PROVIDER, ...x }), redraw()),
+                  () => ((state.provider = { ...NEW_PROVIDER, ...x, editing: true }), redraw()),
                   () => remove("Provider", x.id),
                 ),
               )}
               <div class="decision-form">
-                ${field("Provider id", p.id, (v) => (p.id = v))}
+                ${field("Provider id", p.id, (v) => (p.id = v), "", p.editing)}
                 ${select("Protocol", p.protocol, data.protocols, (v) => (p.protocol = v))}
                 ${field("Base URL", p.baseUrl, (v) => (p.baseUrl = v), "blank uses the model gateway")}
                 ${field("Credential", p.credential, (v) => (p.credential = v), "org service credential")}
                 <button ?disabled=${state.saving || !p.id} @click=${saveProvider}>Save provider</button>
+                ${p.editing ? html`<button @click=${() => ((state.provider = { ...NEW_PROVIDER }), redraw())}>Cancel</button>` : ""}
                 <span class="status">${state.providerStatus ? state.message : ""}</span>
               </div>
               <h3>Rules</h3>
