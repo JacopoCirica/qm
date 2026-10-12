@@ -145,7 +145,7 @@ const PROTOCOLS: Record<
 };
 
 export function createDecisionBackend(opts: {
-  providers: () => readonly DecisionProvider[];
+  providers: () => readonly DecisionProvider[] | Promise<readonly DecisionProvider[]>;
   gateway?: { url: string; apiKey: string; apiKeyHeader?: string };
   credential: (slug: string) => Promise<{ host: string; enabled: boolean; header: [string, string] } | null>;
   fetch?: typeof fetch;
@@ -172,7 +172,7 @@ export function createDecisionBackend(opts: {
   };
   return {
     async choose({ questions, state, model, signal }) {
-      const provider = opts.providers().find((p) => p.id === model.provider);
+      const provider = (await opts.providers()).find((p) => p.id === model.provider);
       if (!provider) throw new Error(`decision provider ${model.provider} is not configured`);
       const { base, auth } = await new Promise<Awaited<ReturnType<typeof endpoint>>>((resolve, reject) => {
         signal.throwIfAborted();

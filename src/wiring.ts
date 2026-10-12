@@ -2,6 +2,7 @@ import { createPostgresTeamStore, type TeamStore } from "./teams/teams.ts";
 import { brokerCredentialAuthHeader } from "./api/credential-broker.ts";
 import { decideHook, type DecisionBackend, type DecisionHook } from "./decisions/decisions.ts";
 import { createDecisionBackend } from "./decisions/providers.ts";
+import { createPostgresDecisionStore, type DecisionStore } from "./decisions/store.ts";
 import type { SlackSessionStatusState } from "./slack/session-status.ts";
 import { availableRuntimeError } from "./api/runtime-config.ts";
 import { createApprovalStore } from "./core/approval-store.ts";
@@ -105,8 +106,6 @@ import {
   type PersistedBrowseMaxSteps,
   type PersistedBrowseModel,
   type PersistedAutoFlaggerConfig,
-  type PersistedDecisionRules,
-  type PersistedDecisionProviders,
   type PersistedTurnWallClock,
   type PersistedDeploymentIdentity,
 } from "./resolution/config-store.ts";
@@ -547,6 +546,7 @@ export interface BuiltApp {
   fileUploads?: DirectFileUploads;
   featureFlags: FeatureFlagStore;
   teams?: TeamStore;
+  decisions?: DecisionStore;
   replayDedupe?: ReplayDedupe;
   brokerSessions?: BrokerSessionStore;
   directory: DirectoryStore;
@@ -695,9 +695,6 @@ export function buildApp(
     browseMaxSteps: artifactMap<PersistedBrowseMaxSteps>("browse_max_steps_configs"),
     browseModels: artifactMap<PersistedBrowseModel>("browse_model_configs"),
     autoFlaggerConfigs: artifactMap<PersistedAutoFlaggerConfig>("auto_flagger_configs"),
-    decisionRules: artifactMap<PersistedDecisionRules>("decision_rules"),
-    decisionProviders: artifactMap<PersistedDecisionProviders>("decision_providers"),
-    decisionLock: advisoryLock,
     turnWallClocks: artifactMap<PersistedTurnWallClock>("turn_wall_clock_configs"),
     deploymentIdentity: artifactMap<PersistedDeploymentIdentity>("deployment_identity"),
     defaultSecurityPosture: config.securityPosture,
@@ -716,6 +713,7 @@ export function buildApp(
   const teams = config.databaseUrl
     ? createPostgresTeamStore(config.databaseUrl, featureFlags, scopeId("org", config.orgId))
     : undefined;
+  const decisions = config.databaseUrl ? createPostgresDecisionStore(config.databaseUrl) : undefined;
   const connectorStatusCache = createConnectorStatusCache(artifactMap<ConnectorStatusRecord>("connector_status"));
   const slackInstallation = createSlackInstallationStore(
     config.orgId,
@@ -1480,7 +1478,7 @@ export function buildApp(
   const decisionBackend =
     overrides.decisionBackend ??
     createDecisionBackend({
-      providers: () => configStore.getDecisionProviders(),
+      providers: () => decisions?.providers() ?? [],
       ...(config.modelGateway?.apiKey
         ? {
             gateway: {
@@ -1496,9 +1494,9 @@ export function buildApp(
       },
     });
   const DECISION_HOOK_TIMEOUT_MS = 5_000;
-  const decide = (hook: DecisionHook, state: string, input: HarnessTurnInput) =>
+  const decide = async (hook: DecisionHook, state: string, input: HarnessTurnInput) =>
     decideHook(
-      configStore.getDecisionRules(),
+      (await decisions?.rules(hook).catch(reportFailureAs(`decision rules ${hook}`, []))) ?? [],
       hook,
       state,
       decisionBackend,
@@ -2958,6 +2956,7 @@ export function buildApp(
     ...(fileUploads ? { fileUploads } : {}),
     featureFlags,
     teams,
+    ...(decisions ? { decisions } : {}),
     ...(replayDedupe ? { replayDedupe } : {}),
     ...(brokerSessions ? { brokerSessions } : {}),
     directory,
@@ -3061,6 +3060,7 @@ export function serverDeps(
     acl: built.acl,
     credentialUsage: built.credentialUsage,
     featureFlags: built.featureFlags,
+    ...(built.decisions ? { decisions: built.decisions } : {}),
     egressAudit: built.egressAudit,
     sessions: built.sessions,
     auditLog: built.auditLog,

@@ -1,5 +1,3 @@
-import type { DecisionProvider, DecisionRule } from "../decisions/decisions.ts";
-import type { AdvisoryLock } from "../persistence/advisory-lock.ts";
 import type { CommandPolicy, EgressPolicy, ScopeId } from "../types.ts";
 import { scopeId } from "../types.ts";
 import { defaultOrgPolicy } from "../policy/command-policy.ts";
@@ -148,14 +146,6 @@ interface AutoFlaggerConfig {
 export interface PersistedAutoFlaggerConfig extends AutoFlaggerConfig {
   scopeId: ScopeId;
 }
-export interface PersistedDecisionProviders {
-  scopeId: ScopeId;
-  providers: DecisionProvider[];
-}
-export interface PersistedDecisionRules {
-  scopeId: ScopeId;
-  rules: DecisionRule[];
-}
 export interface PersistedTurnWallClock {
   scopeId: ScopeId;
   sec: number;
@@ -272,10 +262,6 @@ export interface ScopedConfigStore {
   getBrowseModel(id: ScopeId): string | null;
   setBrowseModel(id: ScopeId, modelId: string | null): void;
   getAutoFlaggerConfig(): AutoFlaggerConfig | null;
-  getDecisionRules(): readonly DecisionRule[];
-  getDecisionProviders(): readonly DecisionProvider[];
-  setDecisionProviders(providers: DecisionProvider[]): Promise<void>;
-  setDecisionRules(rules: DecisionRule[]): Promise<void>;
   setAutoFlaggerConfig(config: AutoFlaggerConfig | null): void;
   getTurnWallClockSecDurable(id: ScopeId): Promise<number | null>;
   setTurnWallClockSec(id: ScopeId, sec: number | null): Promise<void>;
@@ -317,9 +303,6 @@ export function createMemoryConfigStore(
     browseMaxSteps?: DurableMap<PersistedBrowseMaxSteps>;
     browseModels?: DurableMap<PersistedBrowseModel>;
     autoFlaggerConfigs?: DurableMap<PersistedAutoFlaggerConfig>;
-    decisionRules?: DurableMap<PersistedDecisionRules>;
-    decisionProviders?: DurableMap<PersistedDecisionProviders>;
-    decisionLock?: AdvisoryLock;
     turnWallClocks?: DurableMap<PersistedTurnWallClock>;
     deploymentIdentity?: DurableMap<PersistedDeploymentIdentity>;
     connectorSecretKey?: Buffer | string;
@@ -351,8 +334,6 @@ export function createMemoryConfigStore(
   const browseMaxSteps = new Map<ScopeId, number>();
   const browseModels = new Map<ScopeId, string>();
   let autoFlaggerConfig: AutoFlaggerConfig | null = null;
-  let decisionRules: DecisionRule[] = [];
-  let decisionProviders: DecisionProvider[] = [];
   const turnWallClocks = new Map<ScopeId, number>();
   const soulStore = opts.souls ?? createMemoryMap<PersistedSoul>();
   const soulHistoryStore = opts.soulHistory ?? createMemoryMap<PersistedSoulRevision>();
@@ -379,8 +360,6 @@ export function createMemoryConfigStore(
   const browseMaxStepsStore = opts.browseMaxSteps ?? createMemoryMap<PersistedBrowseMaxSteps>();
   const browseModelStore = opts.browseModels ?? createMemoryMap<PersistedBrowseModel>();
   const autoFlaggerStore = opts.autoFlaggerConfigs ?? createMemoryMap<PersistedAutoFlaggerConfig>();
-  const decisionRulesStore = opts.decisionRules ?? createMemoryMap<PersistedDecisionRules>();
-  const decisionProvidersStore = opts.decisionProviders ?? createMemoryMap<PersistedDecisionProviders>();
   const turnWallClockStore = opts.turnWallClocks ?? createMemoryMap<PersistedTurnWallClock>();
   const deploymentIdentity = opts.deploymentIdentity ?? createMemoryMap<PersistedDeploymentIdentity>();
   const persistWarn = (what: string) => reportFailureAs(`config: persist ${what}`, undefined);
@@ -394,20 +373,6 @@ export function createMemoryConfigStore(
     });
     pendingWrites.set(key, pending);
     void pending.catch(persistWarn(what));
-  };
-  const lockDecisions = <T>(fn: () => Promise<T>) =>
-    opts.decisionLock ? opts.decisionLock.withLock(`decisions:${org}`, fn) : fn();
-  const persistAwaited = (key: string, op: () => Promise<void>): Promise<void> => {
-    const pending = writeQueue(key, op);
-    const settled: Promise<void> = pending.then(
-      () => undefined,
-      () => undefined,
-    );
-    pendingWrites.set(key, settled);
-    void settled.then(() => {
-      if (pendingWrites.get(key) === settled) pendingWrites.delete(key);
-    });
-    return pending;
   };
   const channelHeaderPinListeners = new Set<(id: ScopeId) => void>();
   const noteChannelHeaderPinChanged = (id: ScopeId): void => {
@@ -610,8 +575,6 @@ export function createMemoryConfigStore(
                 rubric: storedAutoFlagger.rubric,
               }
             : null;
-          decisionRules = (await decisionRulesStore.get(org))?.rules ?? [];
-          decisionProviders = (await decisionProvidersStore.get(org))?.providers ?? [];
           for (const r of await turnWallClockStore.all()) turnWallClocks.set(r.scopeId, r.sec);
         })();
       }
@@ -1154,32 +1117,6 @@ export function createMemoryConfigStore(
         );
       }
     },
-    getDecisionProviders: () => decisionProviders,
-    async setDecisionProviders(providers) {
-      await persistAwaited(`decisions:${org}`, () =>
-        lockDecisions(async () => {
-          const stored = (await decisionRulesStore.get(org))?.rules ?? [];
-          const orphan = stored.find((r) => !providers.some((p) => p.id === r.model.provider));
-          if (orphan) throw new Error(`decision rule ${orphan.id} still uses provider ${orphan.model.provider}`);
-          await (providers.length
-            ? decisionProvidersStore.put(org, { scopeId: org, providers })
-            : decisionProvidersStore.delete(org));
-          decisionProviders = providers;
-        }),
-      );
-    },
-    getDecisionRules: () => decisionRules,
-    async setDecisionRules(rules) {
-      await persistAwaited(`decisions:${org}`, () =>
-        lockDecisions(async () => {
-          const known = (await decisionProvidersStore.get(org))?.providers ?? [];
-          const missing = rules.find((r) => !known.some((p) => p.id === r.model.provider));
-          if (missing) throw new Error(`decision rule ${missing.id} uses unknown provider ${missing.model.provider}`);
-          await (rules.length ? decisionRulesStore.put(org, { scopeId: org, rules }) : decisionRulesStore.delete(org));
-          decisionRules = rules;
-        }),
-      );
-    },
     getTurnWallClockSecDurable: async (id) => (await turnWallClockStore.get(id))?.sec ?? null,
     async setTurnWallClockSec(id, sec) {
       await writeQueue(`turnWallClock:${id}`, () =>
@@ -1279,8 +1216,6 @@ export function createMemoryConfigStore(
         channelHeaderPinRow,
         autoFlaggerRow,
         internalOverridesRow,
-        decisionRulesRow,
-        decisionProvidersRow,
       ] = await Promise.all([
         soulStore.get(id),
         commandPolicyStore.get(id),
@@ -1299,8 +1234,6 @@ export function createMemoryConfigStore(
         channelHeaderPinStore.get(id),
         id === org ? autoFlaggerStore.get(org) : null,
         id === org ? internalMemberOverridesStore.get(org) : null,
-        id === org ? decisionRulesStore.get(org) : null,
-        id === org ? decisionProvidersStore.get(org) : null,
       ]);
       let refreshedSoul = soul;
       const legacyHistory = legacySoulHistory.get(id) ?? [];
@@ -1347,8 +1280,6 @@ export function createMemoryConfigStore(
         autoFlaggerConfig = autoFlaggerRow
           ? { harnessId: autoFlaggerRow.harnessId, modelId: autoFlaggerRow.modelId, rubric: autoFlaggerRow.rubric }
           : null;
-      if (id === org) decisionRules = decisionRulesRow?.rules ?? [];
-      if (id === org) decisionProviders = decisionProvidersRow?.providers ?? [];
       if (brandingRow) branding.set(id, brandingRow.branding);
       else branding.delete(id);
       if (channelHeaderPinRow) channelHeaderPin.set(id, channelHeaderPinRow.on);
@@ -1373,7 +1304,6 @@ export function createMemoryConfigStore(
               `interactiveFastMode:${org}`,
               `individualModelAuth:${org}`,
               `autoFlagger:${org}`,
-              `decisions:${org}`,
             ]
           : []),
         `channelHeaderPin:${id}`,

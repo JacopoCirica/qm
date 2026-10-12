@@ -2,16 +2,20 @@ import "./support/auto-fake-sprites.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  parseDecisionRules,
+  checkRuleSet,
+  parseDecisionRule,
   runHook,
   type DecisionBackend,
   type DecisionRule,
-  parseDecisionProviders,
+  parseDecisionProvider,
   type DecisionProvider,
 } from "../src/decisions/decisions.ts";
 import { createDecisionBackend } from "../src/decisions/providers.ts";
 
 const PROVIDERS: DecisionProvider[] = [{ id: "gw", protocol: "chat-completions" }];
+const MODELS = new Set(["m-deep"]);
+const parse = (raw: unknown) => parseDecisionRule(raw, PROVIDERS, MODELS);
+const err = (r: object) => String((r as { error: string }).error);
 
 const injection = (over: Partial<DecisionRule> = {}): DecisionRule => ({
   id: "injection",
@@ -24,6 +28,7 @@ const injection = (over: Partial<DecisionRule> = {}): DecisionRule => ({
   model: { provider: "gw", model: "example/decision-model" },
   mode: "enforce",
   onError: "no",
+  enabled: true,
   ...over,
 });
 
@@ -46,47 +51,41 @@ const fixed = (p: Record<string, number> | Error, calls: string[][] = []): Decis
   },
 });
 
-test("parseDecisionRules validates hooks, options, actions and onError", () => {
+test("parseDecisionRule validates hooks, options, actions, onError, provider and model catalog", () => {
+  assert.match(err(parse(injection())), /tool_response is not available yet/);
+  assert.deepEqual(parse(route()), { rule: route() });
+  assert.deepEqual(parse({ ...route(), enabled: undefined }), { rule: route() });
+  assert.match(err(parse({ ...route(), hook: "nope" })), /hook/);
+  assert.match(err(parse({ ...route(), onError: "maybe" })), /onError/);
   assert.match(
-    String((parseDecisionRules([injection()], PROVIDERS) as { error: string }).error),
-    /tool_response is not available yet/,
-  );
-  assert.deepEqual(parseDecisionRules([route()], PROVIDERS), { rules: [route()] });
-  assert.match(
-    String((parseDecisionRules([{ ...route(), hook: "nope" }], PROVIDERS) as { error: string }).error),
-    /hook/,
-  );
-  assert.match(
-    String((parseDecisionRules([{ ...route(), onError: "maybe" }], PROVIDERS) as { error: string }).error),
-    /onError/,
-  );
-  assert.match(
-    String(
-      (
-        parseDecisionRules(
-          [
-            {
-              ...route(),
-              options: { keep: { description: "x", action: "explode" }, deep: { description: "y", action: "keep" } },
-            },
-          ],
-          PROVIDERS,
-        ) as { error: string }
-      ).error,
+    err(
+      parse({
+        ...route(),
+        options: { keep: { description: "x", action: "explode" }, deep: { description: "y", action: "keep" } },
+      }),
     ),
     /action/,
   );
-  assert.match(String((parseDecisionRules([route(), route()], PROVIDERS) as { error: string }).error), /duplicate/);
+  assert.match(err(parse({ ...route(), model: { provider: "nope", model: "x" } })), /provider/);
   assert.match(
-    String(
-      (
-        parseDecisionRules([{ ...route(), model: { provider: "nope", model: "x" } }], PROVIDERS) as {
-          error: string;
-        }
-      ).error,
+    err(
+      parse({
+        ...route(),
+        options: {
+          keep: { description: "a", action: "keep" },
+          deep: { description: "b", action: "use_runtime", runtime: { modelId: "made-up" } },
+        },
+      }),
     ),
-    /provider/,
+    /made-up is not in this deployment's model catalog/,
   );
+});
+
+test("checkRuleSet allows one enabled enforcing rule per most_confident hook", () => {
+  const second = { ...route(), id: "router-2" };
+  assert.match(String(checkRuleSet([route(), second])), /allows one enforcing rule/);
+  assert.equal(checkRuleSet([route(), { ...second, mode: "observe" }]), undefined);
+  assert.equal(checkRuleSet([route(), { ...second, enabled: false }]), undefined);
 });
 
 test("runHook: highest-probability option decides; observe rules never act; errors fall back to onError", async () => {
@@ -179,22 +178,14 @@ function capture(response: unknown) {
 }
 
 test("providers name a protocol, and a custom endpoint needs an org credential", () => {
+  assert.ok("provider" in parseDecisionProvider({ id: "gw", protocol: "chat-completions" }));
   assert.ok(
-    "providers" in
-      parseDecisionProviders([
-        { id: "gw", protocol: "chat-completions" },
-        { id: "oa", protocol: "decisions", baseUrl: "https://dec.example/v1", credential: "dec" },
-      ]),
+    "provider" in
+      parseDecisionProvider({ id: "oa", protocol: "decisions", baseUrl: "https://dec.example/v1", credential: "dec" }),
   );
+  assert.match(err(parseDecisionProvider({ id: "x", protocol: "llama" })), /protocol/);
   assert.match(
-    String((parseDecisionProviders([{ id: "x", protocol: "llama" }]) as { error: string }).error),
-    /protocol/,
-  );
-  assert.match(
-    String(
-      (parseDecisionProviders([{ id: "x", protocol: "decisions", baseUrl: "https://a.example" }]) as { error: string })
-        .error,
-    ),
+    err(parseDecisionProvider({ id: "x", protocol: "decisions", baseUrl: "https://a.example" })),
     /together/,
   );
 });
@@ -301,47 +292,19 @@ test("a missing, disabled or mismatched credential is an error, so the rule fall
 
 test("each hook point only accepts its own actions; use_runtime carries a runtime", () => {
   const router = (options: Record<string, unknown>) =>
-    parseDecisionRules([{ ...injection(), id: "router", hook: "turn_start", onError: "keep", options }], PROVIDERS);
+    parse({ ...injection(), id: "router", hook: "turn_start", onError: "keep", options });
   const ok = router({
     keep: { description: "ordinary", action: "keep" },
     deep: { description: "hard", action: "use_runtime", runtime: { modelId: "m-deep", effortLevel: "high" } },
   });
-  assert.ok("rules" in ok, JSON.stringify(ok));
+  assert.ok("rule" in ok, JSON.stringify(ok));
   assert.match(
-    String(
-      (
-        router({ keep: { description: "a", action: "keep" }, no: { description: "b", action: "block" } }) as {
-          error: string;
-        }
-      ).error,
-    ),
+    err(router({ keep: { description: "a", action: "keep" }, no: { description: "b", action: "block" } })),
     /turn_start must be one of keep, use_runtime/,
   );
   assert.match(
-    String(
-      (
-        router({ keep: { description: "a", action: "keep" }, deep: { description: "b", action: "use_runtime" } }) as {
-          error: string;
-        }
-      ).error,
-    ),
+    err(router({ keep: { description: "a", action: "keep" }, deep: { description: "b", action: "use_runtime" } })),
     /runtime is required/,
-  );
-  assert.match(
-    String(
-      (
-        parseDecisionRules(
-          [
-            {
-              ...injection(),
-              options: { yes: { description: "a", action: "pause" }, no: { description: "b", action: "allow" } },
-            },
-          ],
-          PROVIDERS,
-        ) as { error: string }
-      ).error,
-    ),
-    /tool_response is not available yet/,
   );
 });
 
@@ -370,4 +333,40 @@ test("most_confident hook points follow the likeliest enforced verdict and error
   assert.equal(both.decisive?.action, "step_back");
   const failing = await runHook([goal("x", "down")], "goal_check", "{}", backend, signal);
   assert.equal(failing.decisive?.action, "continue", "a failed classifier falls back to its onError option");
+});
+
+test("the decisions resource validates against the model catalog and keeps agent rules in observe mode", async () => {
+  const { ADMIN_RESOURCE_BY_ID } = await import("../src/api/routes/admin-resources.ts");
+  const { selectableBaseModels } = await import("../src/model/pi-models.ts");
+  const saved: DecisionRule[] = [];
+  const decisions = {
+    providers: async () => PROVIDERS,
+    rules: async () => saved,
+    saveProvider: async () => {},
+    removeProvider: async () => {},
+    saveRule: async (r: DecisionRule) => void saved.push(r),
+    removeRule: async () => {},
+  };
+  const modelId = selectableBaseModels()[0]!.id;
+  const rule = {
+    ...route(),
+    options: {
+      keep: { description: "ordinary", action: "keep" },
+      deep: { description: "hard", action: "use_runtime", runtime: { modelId } },
+    },
+  };
+  const apply = (body: unknown, capability: unknown = null) =>
+    ADMIN_RESOURCE_BY_ID.get("decisions")!.apply(
+      { body, capability, deps: { decisions } } as never,
+      { id: "admin@x.com" },
+      "org:default-org",
+    );
+  assert.match(err(await apply({ rule: route() })), /m-deep is not in this deployment's model catalog/);
+  assert.match(err(await apply({ rule }, { actorId: "admin@x.com" })), /observe mode/);
+  assert.deepEqual(await apply({ rule: { ...rule, mode: "observe" } }, { actorId: "admin@x.com" }), { ok: true });
+  assert.deepEqual(await apply({ rule }), { ok: true });
+  assert.deepEqual(
+    saved.map((r) => r.mode),
+    ["observe", "enforce"],
+  );
 });

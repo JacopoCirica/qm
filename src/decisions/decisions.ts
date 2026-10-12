@@ -46,6 +46,7 @@ export interface DecisionRule {
   model: DecisionModelRef;
   mode: "observe" | "enforce";
   onError: string;
+  enabled: boolean;
 }
 
 export interface DecisionResult {
@@ -81,124 +82,118 @@ const MAX_TEXT_CHARS = 500;
 const MAX_STATE_CHARS = 8_000;
 const MAX_RULE_TEXT_CHARS = 16_000;
 
-export function parseDecisionProviders(value: unknown): { providers: DecisionProvider[] } | { error: string } {
-  if (!Array.isArray(value)) return { error: "decision providers must be an array" };
-  const ids = new Set<string>();
-  const providers: DecisionProvider[] = [];
-  for (const [i, raw] of value.entries()) {
-    const r = (raw ?? {}) as Record<string, unknown>;
-    if (typeof r.id !== "string" || !ID.test(r.id)) return { error: `provider ${i}: id must match ${ID}` };
-    if (ids.has(r.id)) return { error: `provider ${r.id}: duplicate id` };
-    ids.add(r.id);
-    if (!DECISION_PROTOCOLS.includes(r.protocol as DecisionProvider["protocol"]))
-      return { error: `provider ${r.id}: protocol must be one of ${DECISION_PROTOCOLS.join(", ")}` };
-    if ((r.baseUrl === undefined) !== (r.credential === undefined))
-      return {
-        error: `provider ${r.id}: set baseUrl and credential together, or neither to use the model gateway`,
-      };
-    if (r.credential !== undefined && (typeof r.credential !== "string" || !ID.test(r.credential)))
-      return { error: `provider ${r.id}: credential must name an org service credential` };
-    if (r.baseUrl !== undefined) {
-      let url: URL;
-      try {
-        url = new URL(String(r.baseUrl));
-      } catch {
-        return { error: `provider ${r.id}: baseUrl is not a URL` };
-      }
-      if (url.protocol !== "https:" && url.protocol !== "http:")
-        return { error: `provider ${r.id}: baseUrl must be http(s)` };
+export function parseDecisionProvider(raw: unknown): { provider: DecisionProvider } | { error: string } {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  if (typeof r.id !== "string" || !ID.test(r.id)) return { error: `provider id must match ${ID}` };
+  if (!DECISION_PROTOCOLS.includes(r.protocol as DecisionProvider["protocol"]))
+    return { error: `provider ${r.id}: protocol must be one of ${DECISION_PROTOCOLS.join(", ")}` };
+  if ((r.baseUrl === undefined) !== (r.credential === undefined))
+    return { error: `provider ${r.id}: set baseUrl and credential together, or neither to use the model gateway` };
+  if (r.credential !== undefined && (typeof r.credential !== "string" || !ID.test(r.credential)))
+    return { error: `provider ${r.id}: credential must name an org service credential` };
+  if (r.baseUrl !== undefined) {
+    let url: URL;
+    try {
+      url = new URL(String(r.baseUrl));
+    } catch {
+      return { error: `provider ${r.id}: baseUrl is not a URL` };
     }
-    providers.push({
+    if (url.protocol !== "https:" && url.protocol !== "http:")
+      return { error: `provider ${r.id}: baseUrl must be http(s)` };
+  }
+  return {
+    provider: {
       id: r.id,
       protocol: r.protocol as DecisionProvider["protocol"],
       ...(r.baseUrl !== undefined ? { baseUrl: String(r.baseUrl), credential: r.credential as string } : {}),
-    });
-  }
-  return { providers };
+    },
+  };
 }
 
-export function parseDecisionRules(
-  value: unknown,
+export function parseDecisionRule(
+  raw: unknown,
   providers: readonly DecisionProvider[],
-): { rules: DecisionRule[] } | { error: string } {
-  if (!Array.isArray(value)) return { error: "decision rules must be an array" };
-  if (value.length > MAX_RULES) return { error: `at most ${MAX_RULES} decision rules` };
-  const ids = new Set<string>();
-  const rules: DecisionRule[] = [];
-  for (const [i, raw] of value.entries()) {
-    const at = `rule ${i}`;
-    if (typeof raw !== "object" || raw === null) return { error: `${at} must be an object` };
-    const r = raw as Record<string, unknown>;
-    if (typeof r.id !== "string" || !RULE_ID.test(r.id)) return { error: `${at}: id must match ${RULE_ID}` };
-    if (ids.has(r.id)) return { error: `${at}: duplicate id ${r.id}` };
-    ids.add(r.id);
-    if (!DECISION_HOOKS.includes(r.hook as DecisionHook))
-      return { error: `${r.id}: hook must be one of ${DECISION_HOOKS.join(", ")}` };
-    if (!LIVE_DECISION_HOOKS.includes(r.hook as DecisionHook))
-      return { error: `${r.id}: hook ${String(r.hook)} is not available yet; use ${LIVE_DECISION_HOOKS.join(", ")}` };
-    if (typeof r.question !== "string" || !r.question.trim() || r.question.length > MAX_TEXT_CHARS)
-      return { error: `${r.id}: question is required, at most ${MAX_TEXT_CHARS} characters` };
-    if (r.mode !== "observe" && r.mode !== "enforce") return { error: `${r.id}: mode must be observe or enforce` };
-    if (typeof r.options !== "object" || r.options === null || Array.isArray(r.options))
-      return { error: `${r.id}: options must be an object` };
-    const options: Record<string, DecisionOption> = {};
-    for (const [key, opt] of Object.entries(r.options as Record<string, unknown>)) {
-      if (!ID.test(key)) return { error: `${r.id}: option ${key} must match ${ID}` };
-      const o = opt as Record<string, unknown> | null;
-      if (typeof o?.description !== "string" || !o.description.trim() || o.description.length > MAX_TEXT_CHARS)
-        return { error: `${r.id}.${key}: description is required` };
-      const allowed = DECISION_HOOK_POINTS[r.hook as DecisionHook].actions as readonly string[];
-      if (!allowed.includes(o.action as string))
-        return { error: `${r.id}.${key}: action at ${String(r.hook)} must be one of ${allowed.join(", ")}` };
-      if (o.message !== undefined && (typeof o.message !== "string" || o.message.length > MAX_TEXT_CHARS))
-        return { error: `${r.id}.${key}: message must be a string of at most ${MAX_TEXT_CHARS} characters` };
-      const rt = o.runtime as Record<string, unknown> | undefined;
-      if ((o.action === "use_runtime") !== (rt !== undefined))
-        return { error: `${r.id}.${key}: runtime is required with use_runtime and only allowed there` };
-      if (
-        rt !== undefined &&
-        (typeof rt !== "object" ||
-          rt === null ||
-          typeof rt.modelId !== "string" ||
-          !rt.modelId.trim() ||
-          (rt.effortLevel !== undefined && typeof rt.effortLevel !== "string") ||
-          (rt.fastMode !== undefined && typeof rt.fastMode !== "boolean"))
-      )
-        return { error: `${r.id}.${key}: runtime needs modelId and optional effortLevel/fastMode` };
-      options[key] = {
-        description: o.description,
-        action: o.action as DecisionAction,
-        ...(o.message ? { message: o.message } : {}),
-        ...(rt
-          ? {
-              runtime: {
-                modelId: rt.modelId as string,
-                ...(rt.effortLevel !== undefined ? { effortLevel: rt.effortLevel as string } : {}),
-                ...(rt.fastMode !== undefined ? { fastMode: rt.fastMode as boolean } : {}),
-              },
-            }
-          : {}),
-      };
-    }
-    const count = Object.keys(options).length;
-    if (count < 2 || count > MAX_OPTIONS) return { error: `${r.id}: needs 2 to ${MAX_OPTIONS} options` };
-    if (typeof r.onError !== "string" || !Object.hasOwn(options, r.onError))
-      return { error: `${r.id}: onError must name one of its options` };
-    const m = (r.model ?? {}) as Record<string, unknown>;
-    if (typeof m.provider !== "string" || !providers.some((p) => p.id === m.provider))
-      return { error: `${r.id}: model.provider must name a configured decision provider` };
-    if (typeof m.model !== "string" || !m.model.trim()) return { error: `${r.id}: model.model is required` };
-    const model = { provider: m.provider, model: m.model };
-    rules.push({
+  modelIds: ReadonlySet<string>,
+): { rule: DecisionRule } | { error: string } {
+  if (typeof raw !== "object" || raw === null) return { error: "rule must be an object" };
+  const r = raw as Record<string, unknown>;
+  if (typeof r.id !== "string" || !RULE_ID.test(r.id)) return { error: `rule id must match ${RULE_ID}` };
+  if (!DECISION_HOOKS.includes(r.hook as DecisionHook))
+    return { error: `${r.id}: hook must be one of ${DECISION_HOOKS.join(", ")}` };
+  if (!LIVE_DECISION_HOOKS.includes(r.hook as DecisionHook))
+    return { error: `${r.id}: hook ${String(r.hook)} is not available yet; use ${LIVE_DECISION_HOOKS.join(", ")}` };
+  if (typeof r.question !== "string" || !r.question.trim() || r.question.length > MAX_TEXT_CHARS)
+    return { error: `${r.id}: question is required, at most ${MAX_TEXT_CHARS} characters` };
+  if (r.mode !== "observe" && r.mode !== "enforce") return { error: `${r.id}: mode must be observe or enforce` };
+  if (r.enabled !== undefined && typeof r.enabled !== "boolean") return { error: `${r.id}: enabled must be a boolean` };
+  if (typeof r.options !== "object" || r.options === null || Array.isArray(r.options))
+    return { error: `${r.id}: options must be an object` };
+  const options: Record<string, DecisionOption> = {};
+  for (const [key, opt] of Object.entries(r.options as Record<string, unknown>)) {
+    if (!ID.test(key)) return { error: `${r.id}: option ${key} must match ${ID}` };
+    const o = opt as Record<string, unknown> | null;
+    if (typeof o?.description !== "string" || !o.description.trim() || o.description.length > MAX_TEXT_CHARS)
+      return { error: `${r.id}.${key}: description is required` };
+    const allowed = DECISION_HOOK_POINTS[r.hook as DecisionHook].actions as readonly string[];
+    if (!allowed.includes(o.action as string))
+      return { error: `${r.id}.${key}: action at ${String(r.hook)} must be one of ${allowed.join(", ")}` };
+    if (o.message !== undefined && (typeof o.message !== "string" || o.message.length > MAX_TEXT_CHARS))
+      return { error: `${r.id}.${key}: message must be a string of at most ${MAX_TEXT_CHARS} characters` };
+    const rt = o.runtime as Record<string, unknown> | undefined;
+    if ((o.action === "use_runtime") !== (rt !== undefined))
+      return { error: `${r.id}.${key}: runtime is required with use_runtime and only allowed there` };
+    if (
+      rt !== undefined &&
+      (typeof rt !== "object" ||
+        rt === null ||
+        typeof rt.modelId !== "string" ||
+        !rt.modelId.trim() ||
+        (rt.effortLevel !== undefined && typeof rt.effortLevel !== "string") ||
+        (rt.fastMode !== undefined && typeof rt.fastMode !== "boolean"))
+    )
+      return { error: `${r.id}.${key}: runtime needs modelId and optional effortLevel/fastMode` };
+    if (rt && !modelIds.has(rt.modelId as string))
+      return { error: `${r.id}.${key}: model ${String(rt.modelId)} is not in this deployment's model catalog` };
+    options[key] = {
+      description: o.description,
+      action: o.action as DecisionAction,
+      ...(o.message ? { message: o.message } : {}),
+      ...(rt
+        ? {
+            runtime: {
+              modelId: rt.modelId as string,
+              ...(rt.effortLevel !== undefined ? { effortLevel: rt.effortLevel as string } : {}),
+              ...(rt.fastMode !== undefined ? { fastMode: rt.fastMode as boolean } : {}),
+            },
+          }
+        : {}),
+    };
+  }
+  const count = Object.keys(options).length;
+  if (count < 2 || count > MAX_OPTIONS) return { error: `${r.id}: needs 2 to ${MAX_OPTIONS} options` };
+  if (typeof r.onError !== "string" || !Object.hasOwn(options, r.onError))
+    return { error: `${r.id}: onError must name one of its options` };
+  const m = (r.model ?? {}) as Record<string, unknown>;
+  if (typeof m.provider !== "string" || !providers.some((p) => p.id === m.provider))
+    return { error: `${r.id}: model.provider must name a configured decision provider` };
+  if (typeof m.model !== "string" || !m.model.trim()) return { error: `${r.id}: model.model is required` };
+  return {
+    rule: {
       id: r.id,
       hook: r.hook as DecisionHook,
       question: r.question,
       options,
-      model,
+      model: { provider: m.provider, model: m.model },
       mode: r.mode,
       onError: r.onError,
-    });
-  }
+      enabled: r.enabled !== false,
+    },
+  };
+}
+
+export function checkRuleSet(all: readonly DecisionRule[]): string | undefined {
+  const rules = all.filter((r) => r.enabled);
+  if (rules.length > MAX_RULES) return `at most ${MAX_RULES} enabled decision rules`;
   const confidentHook = rules.find(
     (r, i) =>
       r.mode === "enforce" &&
@@ -206,17 +201,18 @@ export function parseDecisionRules(
       rules.some((o, j) => j < i && o.hook === r.hook && o.mode === "enforce"),
   );
   if (confidentHook)
-    return { error: `${confidentHook.id}: ${confidentHook.hook} allows one enforcing rule; set the others to observe` };
+    return `${confidentHook.id}: ${confidentHook.hook} allows one enforcing rule; set the others to observe`;
   const text = rules.reduce(
     (n, r) => n + r.question.length + Object.values(r.options).reduce((m, o) => m + o.description.length, 0),
     0,
   );
   if (text > MAX_RULE_TEXT_CHARS)
-    return {
-      error: `decision rules total ${text} characters of questions and options; at most ${MAX_RULE_TEXT_CHARS}`,
-    };
-  return { rules };
+    return `enabled decision rules total ${text} characters of questions and options; at most ${MAX_RULE_TEXT_CHARS}`;
+  return undefined;
 }
+
+export const decisionHookCatalog = () =>
+  LIVE_DECISION_HOOKS.map((id) => ({ id, actions: DECISION_HOOK_POINTS[id].actions }));
 
 function pick(rule: DecisionRule, probabilities: Record<string, number>): string {
   let best = rule.onError;
@@ -336,7 +332,7 @@ export async function decideHook(
   signal: () => AbortSignal,
   record: (result: DecisionResult) => void,
 ) {
-  const matching = rules.filter((r) => r.hook === hook);
+  const matching = rules.filter((r) => r.hook === hook && r.enabled);
   if (!matching.length) return undefined;
   const { decisive, results } = await runHook(matching, hook, state, backend, signal());
   for (const result of results) record(result);

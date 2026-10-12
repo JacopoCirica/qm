@@ -13,7 +13,9 @@ export {
 import { mountProviders } from "./settings-providers.ts";
 export { configureProviders, openProvider, loadProviders } from "./settings-providers.ts";
 import { mountFlags } from "./settings-flags.ts";
+import { mountDecisions } from "./settings-decisions.ts";
 export { configureFlags, loadFlags } from "./settings-flags.ts";
+export { configureDecisions, loadDecisions } from "./settings-decisions.ts";
 import { brandingCard } from "./settings-branding.ts";
 import { html } from "lit";
 import { classMap } from "lit/directives/class-map.js";
@@ -346,6 +348,7 @@ function card(s: SettingsState) {
 }
 export function mountCards() {
   mountFlags();
+  mountDecisions();
   mountProviders();
   mountCredentials();
   const renderRuntimes = mountTemplate('template[data-settings-card="card-base-model"]', () =>
