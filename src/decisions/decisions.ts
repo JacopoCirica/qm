@@ -1,8 +1,20 @@
-const DECISION_HOOKS = ["user_input", "tool_response"] as const;
-export type DecisionHook = (typeof DECISION_HOOKS)[number];
+export const DECISION_HOOK_POINTS = {
+  user_input: { actions: ["allow", "block"], decide: "most_restrictive" },
+  tool_response: { actions: ["allow", "block"], decide: "most_restrictive" },
+  turn_start: { actions: ["keep", "use_runtime"], decide: "most_confident" },
+  goal_check: { actions: ["continue", "complete", "step_back", "pause"], decide: "most_confident" },
+} as const satisfies Record<string, { actions: readonly string[]; decide: "most_restrictive" | "most_confident" }>;
+export type DecisionHook = keyof typeof DECISION_HOOK_POINTS;
+export type DecisionAction<H extends DecisionHook = DecisionHook> = (typeof DECISION_HOOK_POINTS)[H]["actions"][number];
+const DECISION_HOOKS = Object.keys(DECISION_HOOK_POINTS) as DecisionHook[];
+const rank = (hook: DecisionHook, action: string) =>
+  (DECISION_HOOK_POINTS[hook].actions as readonly string[]).indexOf(action);
 
-const DECISION_ACTIONS = ["allow", "block"] as const;
-export type DecisionAction = (typeof DECISION_ACTIONS)[number];
+export interface RuntimeParams {
+  modelId: string;
+  effortLevel?: string;
+  fastMode?: boolean;
+}
 
 const DECISION_PROVIDER_KINDS = ["litellm", "openai", "typesafe"] as const;
 
@@ -21,6 +33,7 @@ interface DecisionOption {
   description: string;
   action: DecisionAction;
   message?: string;
+  runtime?: RuntimeParams;
 }
 
 export interface DecisionRule {
@@ -38,6 +51,7 @@ export interface DecisionResult {
   option: string;
   action: DecisionAction;
   message?: string;
+  runtime?: RuntimeParams;
   probabilities: Record<string, number>;
   mode: DecisionRule["mode"];
   error?: string;
@@ -122,13 +136,34 @@ export function parseDecisionRules(
       const o = opt as Record<string, unknown> | null;
       if (typeof o?.description !== "string" || !o.description.trim())
         return { error: `${r.id}.${key}: description is required` };
-      if (!DECISION_ACTIONS.includes(o.action as DecisionAction))
-        return { error: `${r.id}.${key}: action must be one of ${DECISION_ACTIONS.join(", ")}` };
+      const allowed = DECISION_HOOK_POINTS[r.hook as DecisionHook].actions as readonly string[];
+      if (!allowed.includes(o.action as string))
+        return { error: `${r.id}.${key}: action at ${String(r.hook)} must be one of ${allowed.join(", ")}` };
       if (o.message !== undefined && typeof o.message !== "string") return { error: `${r.id}.${key}: bad message` };
+      const rt = o.runtime as Record<string, unknown> | undefined;
+      if ((o.action === "use_runtime") !== (rt !== undefined))
+        return { error: `${r.id}.${key}: runtime is required with use_runtime and only allowed there` };
+      if (
+        rt &&
+        (typeof rt.modelId !== "string" ||
+          !rt.modelId.trim() ||
+          (rt.effortLevel !== undefined && typeof rt.effortLevel !== "string") ||
+          (rt.fastMode !== undefined && typeof rt.fastMode !== "boolean"))
+      )
+        return { error: `${r.id}.${key}: runtime needs modelId and optional effortLevel/fastMode` };
       options[key] = {
         description: o.description,
         action: o.action as DecisionAction,
         ...(o.message ? { message: o.message } : {}),
+        ...(rt
+          ? {
+              runtime: {
+                modelId: rt.modelId as string,
+                ...(rt.effortLevel !== undefined ? { effortLevel: rt.effortLevel as string } : {}),
+                ...(rt.fastMode !== undefined ? { fastMode: rt.fastMode as boolean } : {}),
+              },
+            }
+          : {}),
       };
     }
     if (Object.keys(options).length < 2) return { error: `${r.id}: at least two options are required` };
@@ -157,7 +192,7 @@ function pick(rule: DecisionRule, probabilities: Record<string, number>): string
   let bestP = -1;
   for (const [key, opt] of Object.entries(rule.options)) {
     const p = probabilities[key] ?? 0;
-    const restrictive = DECISION_ACTIONS.indexOf(opt.action) > DECISION_ACTIONS.indexOf(rule.options[best]!.action);
+    const restrictive = rank(rule.hook, opt.action) > rank(rule.hook, rule.options[best]!.action);
     if (p > bestP || (p === bestP && restrictive)) {
       best = key;
       bestP = p;
@@ -187,6 +222,7 @@ function settle(rule: DecisionRule, answer: Record<string, number> | Error | und
     option,
     action: opt.action,
     ...(opt.message ? { message: opt.message } : {}),
+    ...(opt.runtime ? { runtime: opt.runtime } : {}),
     probabilities,
     mode: rule.mode,
     ...(error ? { error } : {}),
@@ -227,20 +263,22 @@ export async function runHook(
   state: string,
   backend: DecisionBackend,
   signal: AbortSignal,
-): Promise<{ action: DecisionAction; decisive?: DecisionResult; results: DecisionResult[] }> {
+): Promise<{ decisive?: DecisionResult; results: DecisionResult[] }> {
   const groups = new Map<string, DecisionRule[]>();
   for (const rule of rules.filter((r) => r.hook === hook)) {
     const key = JSON.stringify([rule.model.provider, rule.model.model]);
     groups.set(key, [...(groups.get(key) ?? []), rule]);
   }
   const results = (await Promise.all([...groups.values()].map((g) => runGroup(g, state, backend, signal)))).flat();
+  const confident = DECISION_HOOK_POINTS[hook].decide === "most_confident";
+  const weight = (r: DecisionResult) =>
+    confident && !r.error ? (r.probabilities[r.option] ?? 0) : rank(hook, r.action);
   let decisive: DecisionResult | undefined;
   for (const result of results) {
-    if (result.mode !== "enforce") continue;
-    if (!decisive || DECISION_ACTIONS.indexOf(result.action) > DECISION_ACTIONS.indexOf(decisive.action))
-      decisive = result;
+    if (result.mode !== "enforce" || (confident && result.error)) continue;
+    if (!decisive || weight(result) > weight(decisive)) decisive = result;
   }
-  return { action: decisive?.action ?? "allow", ...(decisive ? { decisive } : {}), results };
+  return { ...(decisive ? { decisive } : {}), results };
 }
 
 const sample = (value: unknown) =>

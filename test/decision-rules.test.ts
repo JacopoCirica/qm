@@ -83,7 +83,7 @@ test("parseDecisionRules validates hooks, options, actions and onError", () => {
 test("runHook: highest-probability option decides; observe rules never act; errors fall back to onError", async () => {
   const signal = new AbortController().signal;
   const block = await runHook([injection()], "tool_response", "x", fixed({ yes: 0.9, no: 0.1 }), signal);
-  assert.equal(block.action, "block");
+  assert.equal(block.decisive?.action, "block");
   assert.equal(block.decisive?.message, "prompt injection");
 
   const observed = await runHook(
@@ -93,14 +93,14 @@ test("runHook: highest-probability option decides; observe rules never act; erro
     fixed({ yes: 0.9, no: 0.1 }),
     signal,
   );
-  assert.equal(observed.action, "allow");
+  assert.equal(observed.decisive, undefined);
   assert.equal(observed.results[0]?.option, "yes", "observed verdict is still reported");
 
   const otherHook = await runHook([injection()], "user_input", "x", fixed({ yes: 1 }), signal);
   assert.equal(otherHook.results.length, 0);
 
   const failed = await runHook([injection()], "tool_response", "x", fixed(new Error("down")), signal);
-  assert.equal(failed.action, "allow");
+  assert.equal(failed.decisive?.action, "allow");
   assert.equal(failed.results[0]?.error, "Error: down");
   const caused = new Error("fetch failed", { cause: new Error("getaddrinfo ENOTFOUND gateway") });
   const malformed = createDecisionBackend({
@@ -140,7 +140,7 @@ test("runHook: highest-probability option decides; observe rules never act; erro
     fixed(new Error("down")),
     signal,
   );
-  assert.equal(failClosed.action, "block");
+  assert.equal(failClosed.decisive?.action, "block");
 });
 
 const ask = (backend: ReturnType<typeof createDecisionBackend>, model: { provider: string; model: string }) =>
@@ -289,4 +289,77 @@ test("a decision rule on tool_response quarantines tool output end to end", asyn
   built.config.setDecisionRules([]);
   const control = await turn("!screened-run printf 'zebra crossing'", "c");
   assert.doesNotMatch(control.reply ?? "", /quarantined/, "without the rule the same output passes");
+});
+
+test("each hook point only accepts its own actions; use_runtime carries a runtime", () => {
+  const router = (options: Record<string, unknown>) =>
+    parseDecisionRules([{ ...injection(), id: "router", hook: "turn_start", onError: "keep", options }], PROVIDERS);
+  const ok = router({
+    keep: { description: "ordinary", action: "keep" },
+    deep: { description: "hard", action: "use_runtime", runtime: { modelId: "m-deep", effortLevel: "high" } },
+  });
+  assert.ok("rules" in ok, JSON.stringify(ok));
+  assert.match(
+    String(
+      (
+        router({ keep: { description: "a", action: "keep" }, no: { description: "b", action: "block" } }) as {
+          error: string;
+        }
+      ).error,
+    ),
+    /turn_start must be one of keep, use_runtime/,
+  );
+  assert.match(
+    String(
+      (
+        router({ keep: { description: "a", action: "keep" }, deep: { description: "b", action: "use_runtime" } }) as {
+          error: string;
+        }
+      ).error,
+    ),
+    /runtime is required/,
+  );
+  assert.match(
+    String(
+      (
+        parseDecisionRules(
+          [
+            {
+              ...injection(),
+              options: { yes: { description: "a", action: "pause" }, no: { description: "b", action: "allow" } },
+            },
+          ],
+          PROVIDERS,
+        ) as { error: string }
+      ).error,
+    ),
+    /tool_response must be one of allow, block/,
+  );
+});
+
+test("most_confident hook points follow the likeliest enforced verdict and skip errored rules", async () => {
+  const signal = new AbortController().signal;
+  const goal = (id: string, model: string) => ({
+    ...injection(),
+    id,
+    hook: "goal_check" as const,
+    onError: "continue",
+    model: { provider: PROVIDERS[0]!.id, model },
+    options: {
+      continue: { description: "progress", action: "continue" as const },
+      step_back: { description: "looping", action: "step_back" as const },
+    },
+  });
+  const backend: DecisionBackend = {
+    async choose({ questions, model }) {
+      if (model.model === "down") throw new Error("down");
+      const p = model.model === "a" ? { continue: 0.6, step_back: 0.4 } : { continue: 0.1, step_back: 0.9 };
+      return Object.fromEntries(Object.keys(questions).map((k) => [k, p]));
+    },
+  };
+  const both = await runHook([goal("a", "a"), goal("b", "b")], "goal_check", "{}", backend, signal);
+  assert.equal(both.decisive?.ruleId, "b");
+  assert.equal(both.decisive?.action, "step_back");
+  const failing = await runHook([goal("x", "down")], "goal_check", "{}", backend, signal);
+  assert.equal(failing.decisive, undefined, "a failed classifier leaves the built-in governor in charge");
 });

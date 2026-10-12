@@ -1,4 +1,5 @@
-import { createDecisionBackend, type DecisionBackend } from "./decisions/decisions.ts";
+import { createDecisionBackend, runHook, type DecisionBackend, type DecisionHook } from "./decisions/decisions.ts";
+import type { GovernorVerdict } from "./harness/goal.ts";
 import type { SlackSessionStatusState } from "./slack/session-status.ts";
 import { availableRuntimeError } from "./api/runtime-config.ts";
 import { createApprovalStore } from "./core/approval-store.ts";
@@ -318,7 +319,7 @@ import { createClaudeHarness, claudeHarnessConfigOptions } from "./harness/claud
 import { createPiHarness, piHarnessConfigOptions, type ProviderKeys } from "./harness/pi-harness.ts";
 import { createHarnessRouter, resolveRuntimeChoiceDurable } from "./harness/harness-router.ts";
 import { selectableModelCatalog } from "./model/model-catalog.ts";
-import type { Harness } from "./harness/harness.ts";
+import type { Harness, HarnessTurnInput } from "./harness/harness.ts";
 import { createSecurityScreenProxy, type SecurityScreener } from "./security/security-screener.ts";
 import { createMemoryTaskStore } from "./tasks/memory-task-store.ts";
 import { createPostgresTaskStore } from "./tasks/postgres-task-store.ts";
@@ -1469,29 +1470,81 @@ export function buildApp(
       return defaultForHarness(fallbackHarness);
     },
   };
+  const decisionBackend =
+    overrides.decisionBackend ??
+    createDecisionBackend({
+      providers: () => configStore.getDecisionProviders(),
+      env: { ...config.decisionKeys, MODEL_GATEWAY_API_KEY: config.modelGateway?.apiKey },
+      ...(config.modelGateway
+        ? { gatewayUrl: config.modelGateway.url, gatewayKeyHeader: config.modelGateway.apiKeyHeader }
+        : {}),
+    });
+  const DECISION_HOOK_TIMEOUT_MS = 5_000;
+  const decide = async (hook: DecisionHook, state: string, input: HarnessTurnInput) => {
+    const rules = configStore.getDecisionRules().filter((r) => r.hook === hook);
+    if (!rules.length) return undefined;
+    const signal = AbortSignal.any([
+      AbortSignal.timeout(DECISION_HOOK_TIMEOUT_MS),
+      ...(input.cancel ? [input.cancel] : []),
+    ]);
+    const { decisive, results } = await runHook(rules, hook, state, decisionBackend, signal);
+    for (const result of results)
+      auditLog.record({
+        at: Date.now(),
+        principalId: input.runtimeActorId ?? "system",
+        action: "decision.classify",
+        resource: result.ruleId,
+        scopeLabel: input.scopeLabel,
+        status: result.error ? "error" : result.action,
+        detail: JSON.stringify({
+          hook,
+          sessionId: input.session.id,
+          ...(input.runId ? { runId: input.runId } : {}),
+          ...result,
+        }),
+      });
+    return decisive;
+  };
   const judgeModelId = (): string => config.judgeModelId ?? auxiliaryModelFor(orgBaseModelId() ?? fallback.modelId);
   const hydrateModelCatalog = async (): Promise<unknown> => {
     await refreshModels();
     if (!(await modelCredentials.availability()).openrouter) return undefined;
     return selectableModelCatalog(overrides.modelCredentialFetch);
   };
-  const harness = createHarnessRouter(adapters, adapters.get(fallbackHarness)!, async (input) => {
-    await refreshModels();
-    if (input.runtimePinned && input.runtime?.harnessId && input.runtime.modelId) {
-      if (!modelSupportedByHarness(input.runtime.modelId, input.runtime.harnessId))
-        throw new Error(`Unsupported model: ${input.runtime.modelId}`);
-      return { ...input.runtime, harnessId: input.runtime.harnessId, modelId: input.runtime.modelId };
-    }
-    return resolveRuntimeChoiceDurable(
-      configStore,
-      runtimeOrgScope,
-      input.scopeLabel,
-      fallback,
-      input.runtime,
-      hydrateModelCatalog,
-      input.runtimePurpose,
-    );
-  });
+  const harness = createHarnessRouter(
+    adapters,
+    adapters.get(fallbackHarness)!,
+    async (input) => {
+      await refreshModels();
+      if (input.runtimePinned && input.runtime?.harnessId && input.runtime.modelId) {
+        if (!modelSupportedByHarness(input.runtime.modelId, input.runtime.harnessId))
+          throw new Error(`Unsupported model: ${input.runtime.modelId}`);
+        return { ...input.runtime, harnessId: input.runtime.harnessId, modelId: input.runtime.modelId };
+      }
+      const choice = await resolveRuntimeChoiceDurable(
+        configStore,
+        runtimeOrgScope,
+        input.scopeLabel,
+        fallback,
+        input.runtime,
+        hydrateModelCatalog,
+        input.runtimePurpose,
+      );
+      if (input.runtime?.modelId || input.continueTurn) return choice;
+      const routed = (await decide("turn_start", input.input, input))?.runtime;
+      if (!routed || !modelSupportedByHarness(routed.modelId, choice.harnessId)) return choice;
+      return { ...choice, ...routed };
+    },
+    async (input, goal) => {
+      const decisive = await decide("goal_check", JSON.stringify(goal), input);
+      if (!decisive) return undefined;
+      const verdict = decisive.action as GovernorVerdict["verdict"];
+      return {
+        verdict: verdict === "complete" && goal.trigger !== "completion" ? "continue" : verdict,
+        reasons: decisive.message ?? `decision ${decisive.ruleId}: ${decisive.option}`,
+      };
+    },
+  );
 
   if (config.securityScreen === "off" || config.securityScreenClassifier !== "model") {
     delete harness.models.screenSecurity;
@@ -1984,15 +2037,7 @@ export function buildApp(
     turnLeaseWaitMs: config.turnLeaseWaitMs,
     securityScreenTimeoutMs: config.securityScreenTimeoutMs,
     ...(securityScreener ? { securityScreener } : {}),
-    decisionBackend:
-      overrides.decisionBackend ??
-      createDecisionBackend({
-        providers: () => configStore.getDecisionProviders(),
-        env: { ...config.decisionKeys, MODEL_GATEWAY_API_KEY: config.modelGateway?.apiKey },
-        ...(config.modelGateway
-          ? { gatewayUrl: config.modelGateway.url, gatewayKeyHeader: config.modelGateway.apiKeyHeader }
-          : {}),
-      }),
+    decisionBackend,
     backgroundJobTtlMs: config.backgroundJobTtlMs,
     backgroundJobTtlMaxMs: config.backgroundJobTtlMaxMs,
     sandboxCapabilityTtlMs: config.sandboxCapabilityTtlMs,

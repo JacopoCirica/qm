@@ -271,6 +271,7 @@ export function createHarnessRouter(
   adapters: ReadonlyMap<HarnessId, Harness>,
   utility: Harness,
   resolve: (input: HarnessTurnInput) => RuntimeChoice | Promise<RuntimeChoice>,
+  goalCheck?: (input: HarnessTurnInput, goal: GoalGovernorInput) => Promise<GovernorVerdict | undefined>,
 ): Harness {
   const lastHarness = new Map<string, HarnessId>();
   return {
@@ -303,7 +304,8 @@ export function createHarnessRouter(
             : input.tools,
           ...(judge
             ? {
-                governGoal: (goalInput: GoalGovernorInput) => governGoal(judge, goalInput, input.cancel),
+                governGoal: async (goalInput: GoalGovernorInput) =>
+                  (await goalCheck?.(input, goalInput)) ?? governGoal(judge, goalInput, input.cancel),
               }
             : {}),
         };
