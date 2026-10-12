@@ -5,7 +5,7 @@ let config: any;
 const state = {
   scope: "",
   data: null as any,
-  provider: { id: "", protocol: "chat-completions", baseUrl: "", credential: "" },
+  provider: { id: "", protocol: "chat-completions", baseUrl: "", credential: "", editing: false },
   rule: null as any,
   saving: false,
   message: "",
@@ -48,6 +48,7 @@ function blankRule() {
 }
 function editRule(r: any) {
   state.rule = {
+    editing: true,
     id: r.id,
     hook: r.hook,
     question: r.question,
@@ -126,7 +127,7 @@ function saveProvider() {
   };
   void send({ provider }, () => {
     state.data.providers = upsert(state.data.providers, provider);
-    state.provider = { id: "", protocol: "chat-completions", baseUrl: "", credential: "" };
+    state.provider = { id: "", protocol: "chat-completions", baseUrl: "", credential: "", editing: false };
   });
 }
 function saveRule(rule: any) {
@@ -141,9 +142,10 @@ function remove(kind: "Provider" | "Rule", id: string) {
     state.data[key] = state.data[key].filter((x: any) => x.id !== id);
   });
 }
-const field = (label: string, value: string, set: (v: string) => void, attrs = "") =>
+const field = (label: string, value: string, set: (v: string) => void, attrs = "", locked = false) =>
   html`<label
     >${label}<input
+      ?disabled=${locked}
       .value=${value}
       placeholder=${attrs}
       @input=${(e: Event) => set((e.target as HTMLInputElement).value)}
@@ -159,7 +161,7 @@ function ruleForm() {
   const actions = hookActions(d.hook);
   const models = state.data.models.map((m: any) => m.id);
   return html`<div class="decision-rule-form">
-    ${field("Rule id", d.id, (v) => (d.id = v), "e.g. hard-tasks")}
+    ${field("Rule id", d.id, (v) => (d.id = v), "e.g. hard-tasks", d.editing)}
     ${select(
       "Hook",
       d.hook,
@@ -270,7 +272,7 @@ function template() {
                     ><span>
                       <button
                         ?disabled=${state.saving}
-                        @click=${() => ((state.provider = { baseUrl: "", credential: "", ...p }), redraw())}
+                        @click=${() => ((state.provider = { baseUrl: "", credential: "", ...p, editing: true }), redraw())}
                       >
                         Edit
                       </button>
@@ -281,7 +283,7 @@ function template() {
                   </div>`,
               )}
               <div class="decision-provider-form">
-                ${field("Provider id", state.provider.id, (v) => (state.provider.id = v))}
+                ${field("Provider id", state.provider.id, (v) => (state.provider.id = v), "", state.provider.editing)}
                 ${select("Protocol", state.provider.protocol, data.protocols, (v) => (state.provider.protocol = v))}
                 ${field("Base URL", state.provider.baseUrl, (v) => (state.provider.baseUrl = v), "blank uses the model gateway")}
                 ${field("Credential", state.provider.credential, (v) => (state.provider.credential = v), "org service credential")}

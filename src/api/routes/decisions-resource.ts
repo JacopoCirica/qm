@@ -40,7 +40,9 @@ export const decisionsResource: AdminResource = {
         change = ["decision.provider.save", parsed.provider.id];
       } else if (body.rule !== undefined) {
         const models = new Set(selectableBaseModels().map((m) => m.id));
-        const parsed = parseDecisionRule(body.rule, await store.providers(), models);
+        const named = (body.rule as { model?: { provider?: unknown } } | null)?.model?.provider;
+        const providers = typeof named === "string" ? await store.providers([named]) : [];
+        const parsed = parseDecisionRule(body.rule, providers, models);
         if ("error" in parsed) return parsed;
         await store.saveRule(parsed.rule, by);
         change = ["decision.rule.save", `${parsed.rule.id}:${parsed.rule.mode}`];
