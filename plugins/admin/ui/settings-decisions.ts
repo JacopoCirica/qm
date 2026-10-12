@@ -2,7 +2,7 @@ import { mountTemplate } from "./shared.ts";
 import { html } from "lit";
 import { classMap } from "lit/directives/class-map.js";
 let config: any;
-const NEW_PROVIDER = { id: "", protocol: "chat-completions", baseUrl: "", credential: "", editing: false };
+const NEW_PROVIDER = { id: "", protocol: "chat-completions", baseUrl: "", credential: "" };
 const state = {
   scope: "",
   data: null as any,
@@ -10,7 +10,6 @@ const state = {
   rule: null as any,
   saving: false,
   message: "",
-  messageAt: "",
 };
 let redraw = () => {};
 export function configureDecisions(options: any) {
@@ -23,65 +22,37 @@ export function loadDecisions(data: any, scope: string) {
   redraw();
 }
 const hookActions = (hook: string) => state.data.hooks.find((h: any) => h.id === hook)?.actions || [];
-function blankRule() {
-  const hook = state.data.hooks[0]?.id || "";
-  const [first, second] = hookActions(hook);
+const option = (key: string, o: any, hook: string) => ({
+  key,
+  description: o.description || "",
+  action: o.action || hookActions(hook)[0],
+  message: o.message || "",
+  modelId: o.runtime?.modelId || "",
+  effortLevel: o.runtime?.effortLevel || "",
+  fastMode: !!o.runtime?.fastMode,
+});
+function ruleForm(r: any) {
+  const hook = r?.hook || state.data.hooks[0]?.id || "";
   return {
-    id: "",
+    id: r?.id || "",
     hook,
-    question: "",
-    provider: state.data.providers[0]?.id || "",
-    model: "",
-    mode: "observe",
-    onError: "a",
-    options: [
-      { key: "a", description: "", action: first, message: "", modelId: "", effortLevel: "", fastMode: false },
-      {
-        key: "b",
-        description: "",
-        action: second || first,
-        message: "",
-        modelId: "",
-        effortLevel: "",
-        fastMode: false,
-      },
-    ],
+    question: r?.question || "",
+    provider: r?.model.provider || state.data.providers[0]?.id || "",
+    model: r?.model.model || "",
+    mode: r?.mode || "observe",
+    onError: r?.onError || "a",
+    options: Object.entries(r?.options || { a: {}, b: {} }).map(([k, o]) => option(k, o, hook)),
   };
-}
-function showRule() {
-  redraw();
-  document.querySelector("#card-decisions .decision-rule-form")?.scrollIntoView({ block: "nearest" });
-}
-function editRule(r: any) {
-  state.rule = {
-    editing: true,
-    id: r.id,
-    hook: r.hook,
-    question: r.question,
-    provider: r.model.provider,
-    model: r.model.model,
-    mode: r.mode,
-    onError: r.onError,
-    options: Object.entries(r.options).map(([key, o]: [string, any]) => ({
-      key,
-      description: o.description,
-      action: o.action,
-      message: o.message || "",
-      modelId: o.runtime?.modelId || "",
-      effortLevel: o.runtime?.effortLevel || "",
-      fastMode: o.runtime?.fastMode || false,
-    })),
-  };
-  showRule();
 }
 function ruleBody(d: any) {
+  const keys = d.options.map((o: any) => o.key);
   return {
     id: d.id,
     hook: d.hook,
     question: d.question,
     model: { provider: d.provider, model: d.model },
     mode: d.mode,
-    onError: d.onError,
+    onError: keys.includes(d.onError) ? d.onError : keys[0],
     options: Object.fromEntries(
       d.options.map((o: any) => [
         o.key,
@@ -94,7 +65,7 @@ function ruleBody(d: any) {
                 runtime: {
                   modelId: o.modelId,
                   ...(o.effortLevel ? { effortLevel: o.effortLevel } : {}),
-                  ...(o.fastMode ? { fastMode: true } : {}),
+                  fastMode: o.fastMode,
                 },
               }
             : {}),
@@ -104,18 +75,13 @@ function ruleBody(d: any) {
   };
 }
 async function send(body: any, done: () => void) {
-  const scope = state.scope;
-  state.messageAt = body.provider || body.removeProvider ? "provider" : "rule";
   state.saving = true;
   state.message = "Saving…";
   redraw();
   try {
-    const result = await config.save(scope, body);
-    if (!result.ok) state.message = result.error || result.data?.message || "Save failed.";
-    else {
-      done();
-      state.message = "Saved.";
-    }
+    const result = await config.save(state.scope, body);
+    if (result.ok) done();
+    state.message = result.ok ? "Saved." : result.error || result.data?.message || "Save failed.";
   } catch (error) {
     state.message = `Could not save: ${error instanceof Error ? error.message : String(error)}`;
   } finally {
@@ -137,7 +103,8 @@ function saveProvider() {
     state.provider = { ...NEW_PROVIDER };
   });
 }
-function saveRule(rule: any) {
+function saveRule() {
+  const rule = ruleBody(state.rule);
   void send({ rule }, () => {
     state.data.rules = upsert(state.data.rules, rule);
     state.rule = null;
@@ -145,17 +112,14 @@ function saveRule(rule: any) {
 }
 function remove(kind: "Provider" | "Rule", id: string) {
   if (!confirm(`Remove decision ${kind.toLowerCase()} ${id}?`)) return;
-  void send({ [`remove${kind}`]: id }, () => {
-    const key = kind === "Provider" ? "providers" : "rules";
-    state.data[key] = state.data[key].filter((x: any) => x.id !== id);
-  });
+  const key = kind === "Provider" ? "providers" : "rules";
+  void send({ [`remove${kind}`]: id }, () => (state.data[key] = state.data[key].filter((x: any) => x.id !== id)));
 }
-const field = (label: string, value: string, set: (v: string) => void, attrs = "", locked = false) =>
+const field = (label: string, value: string, set: (v: string) => void, hint = "") =>
   html`<label
     >${label}<input
-      ?disabled=${locked}
       .value=${value}
-      placeholder=${attrs}
+      placeholder=${hint}
       @input=${(e: Event) => set((e.target as HTMLInputElement).value)}
   /></label>`;
 const select = (label: string, value: string, values: readonly string[], set: (v: string) => void) =>
@@ -164,103 +128,72 @@ const select = (label: string, value: string, values: readonly string[], set: (v
       ${values.map((v) => html`<option value=${v} .selected=${v === value}>${v}</option>`)}
     </select></label
   >`;
-function ruleForm() {
+const row = (label: string, onEdit: () => void, onRemove: () => void) =>
+  html`<div class="feature-flag-row">
+    <code>${label}</code
+    ><span
+      ><button ?disabled=${state.saving} @click=${onEdit}>Edit</button
+      ><button class="danger" ?disabled=${state.saving} @click=${onRemove}>Remove</button></span
+    >
+  </div>`;
+function optionFields(d: any, o: any, i: number) {
+  return html`<fieldset class="decision-option">
+    ${field("Option", o.key, (v) => (o.key = v))} ${field("Description", o.description, (v) => (o.description = v))}
+    ${field("Message", o.message, (v) => (o.message = v), "optional")}
+    ${select("Action", o.action, hookActions(d.hook), (v) => (o.action = v))}
+    ${
+      o.action === "use_runtime"
+        ? html`${select("Model", o.modelId, ["", ...state.data.models], (v) => (o.modelId = v))}
+            ${field("Effort", o.effortLevel, (v) => (o.effortLevel = v), "optional")}
+            <label class="setting-toggle"
+              ><input
+                type="checkbox"
+                .checked=${o.fastMode}
+                @change=${(e: Event) => (o.fastMode = (e.target as HTMLInputElement).checked)}
+              />Fast mode</label
+            >`
+        : ""
+    }
+    <button class="danger" @click=${() => (d.options.splice(i, 1), redraw())}>Remove option</button>
+  </fieldset>`;
+}
+function ruleEditor() {
   const d = state.rule;
-  const actions = hookActions(d.hook);
-  const models = state.data.models;
-  return html`<div class="decision-rule-form">
-    ${field("Rule id", d.id, (v) => (d.id = v), "e.g. hard-tasks", d.editing)}
+  const set = (key: string) => (v: string) => (d[key] = v);
+  return html`<div class="decision-form">
+    ${field("Rule id", d.id, set("id"), "e.g. hard-tasks")}
     ${select(
       "Hook",
       d.hook,
       state.data.hooks.map((h: any) => h.id),
-      (v) => {
-        d.hook = v;
-        for (const o of d.options) if (!hookActions(v).includes(o.action)) o.action = hookActions(v)[0];
-      },
+      set("hook"),
     )}
-    <label
-      >Question<textarea
-        .value=${d.question}
-        @input=${(e: Event) => (d.question = (e.target as HTMLTextAreaElement).value)}
-      ></textarea>
-    </label>
+    ${field("Question", d.question, set("question"))}
     ${select(
       "Decision provider",
       d.provider,
       state.data.providers.map((p: any) => p.id),
-      (v) => (d.provider = v),
+      set("provider"),
     )}
-    ${field("Decision model", d.model, (v) => (d.model = v), "model served by the provider")}
-    ${select("Mode", d.mode, state.data.modes, (v) => (d.mode = v))}
-    ${d.options.map(
-      (o: any, i: number) =>
-        html`<fieldset class="decision-option">
-          ${field("Option", o.key, (v) => {
-            if (d.onError === o.key) d.onError = v;
-            o.key = v;
-            redraw();
-          })}
-          ${field("Description", o.description, (v) => (o.description = v))}
-          ${field("Message", o.message, (v) => (o.message = v), "optional")}
-          ${select("Action", o.action, actions, (v) => (o.action = v))}
-          ${
-            o.action === "use_runtime"
-              ? html`${select("Model", o.modelId, ["", ...models], (v) => (o.modelId = v))}
-                  ${field("Effort", o.effortLevel, (v) => (o.effortLevel = v), "optional")}
-                  <label class="setting-toggle"
-                    ><input
-                      type="checkbox"
-                      .checked=${o.fastMode}
-                      @change=${(e: Event) => (o.fastMode = (e.target as HTMLInputElement).checked)}
-                    />Fast mode</label
-                  >`
-              : ""
-          }
-          ${
-            d.options.length > 2
-              ? html`<button
-                  class="danger"
-                  @click=${() => (d.options.splice(i, 1), d.options.some((x: any) => x.key === d.onError) || (d.onError = d.options[0].key), redraw())}
-                >
-                  Remove option
-                </button>`
-              : ""
-          }
-        </fieldset>`,
-    )}
-    <button
-      ?disabled=${d.options.length >= state.data.maxOptions}
-      @click=${() => (
-        d.options.push({
-          key: "",
-          description: "",
-          action: actions[0],
-          message: "",
-          modelId: "",
-          effortLevel: "",
-          fastMode: false,
-        }),
-        redraw()
-      )}
-    >
-      + Option
-    </button>
+    ${field("Decision model", d.model, set("model"), "model served by the provider")}
+    ${select("Mode", d.mode, state.data.modes, set("mode"))}
     ${select(
       "On error",
       d.onError,
       d.options.map((o: any) => o.key),
-      (v) => (d.onError = v),
+      set("onError"),
     )}
+    ${d.options.map((o: any, i: number) => optionFields(d, o, i))}
     <div>
-      <button class="primary" ?disabled=${state.saving} @click=${() => saveRule(ruleBody(d))}>Save rule</button>
+      <button @click=${() => (d.options.push(option("", {}, d.hook)), redraw())}>+ Option</button>
+      <button class="primary" ?disabled=${state.saving} @click=${saveRule}>Save rule</button>
       <button @click=${() => ((state.rule = null), redraw())}>Cancel</button>
-      <span class="status">${state.messageAt === "rule" ? state.message : ""}</span>
     </div>
   </div>`;
 }
 function template() {
   const data = state.data;
+  const p = state.provider;
   return html`<section class=${classMap({ card: true, "sv-customize": true, hidden: !data })} id="card-decisions">
     <div class="head">
       <h2>Decision rules</h2>
@@ -273,62 +206,38 @@ function template() {
       data
         ? html`<div class="body">
               <h3>Providers</h3>
-              ${data.providers.map(
-                (p: any) =>
-                  html`<div class="feature-flag-row">
-                    <code
-                      >${p.id}:
-                      ${p.protocol}${p.baseUrl ? ` · ${p.baseUrl} · ${p.credential}` : " · model gateway"}</code
-                    ><span>
-                      <button
-                        ?disabled=${state.saving}
-                        @click=${() => ((state.provider = { baseUrl: "", credential: "", ...p, editing: true }), redraw())}
-                      >
-                        Edit
-                      </button>
-                      <button class="danger" ?disabled=${state.saving} @click=${() => remove("Provider", p.id)}>
-                        Remove
-                      </button>
-                    </span>
-                  </div>`,
+              ${data.providers.map((x: any) =>
+                row(
+                  `${x.id}: ${x.protocol}${x.baseUrl ? ` · ${x.baseUrl} · ${x.credential}` : " · model gateway"}`,
+                  () => ((state.provider = { ...NEW_PROVIDER, ...x }), redraw()),
+                  () => remove("Provider", x.id),
+                ),
               )}
-              <div class="decision-provider-form">
-                ${field("Provider id", state.provider.id, (v) => (state.provider.id = v), "", state.provider.editing)}
-                ${select("Protocol", state.provider.protocol, data.protocols, (v) => (state.provider.protocol = v))}
-                ${field("Base URL", state.provider.baseUrl, (v) => (state.provider.baseUrl = v), "blank uses the model gateway")}
-                ${field("Credential", state.provider.credential, (v) => (state.provider.credential = v), "org service credential")}
-                <button ?disabled=${state.saving || !state.provider.id} @click=${saveProvider}>Save provider</button>
-                ${
-                  state.provider.editing
-                    ? html`<button @click=${() => ((state.provider = { ...NEW_PROVIDER }), redraw())}>Cancel</button>`
-                    : ""
-                }
-                <span class="status">${state.messageAt === "provider" ? state.message : ""}</span>
+              <div class="decision-form">
+                ${field("Provider id", p.id, (v) => (p.id = v))}
+                ${select("Protocol", p.protocol, data.protocols, (v) => (p.protocol = v))}
+                ${field("Base URL", p.baseUrl, (v) => (p.baseUrl = v), "blank uses the model gateway")}
+                ${field("Credential", p.credential, (v) => (p.credential = v), "org service credential")}
+                <button ?disabled=${state.saving || !p.id} @click=${saveProvider}>Save provider</button>
               </div>
               <h3>Rules</h3>
-              ${data.rules.length ? "" : html`<div class="hint">No rules yet.</div>`}
-              ${data.rules.map(
-                (r: any) =>
-                  html`<div class="feature-flag-row">
-                    <code>${r.id}: ${r.hook} · ${r.mode}</code>
-                    <span>
-                      <button ?disabled=${state.saving} @click=${() => editRule(r)}>Edit</button>
-                      <button class="danger" ?disabled=${state.saving} @click=${() => remove("Rule", r.id)}>
-                        Remove
-                      </button>
-                    </span>
-                  </div>`,
+              ${data.rules.map((r: any) =>
+                row(
+                  `${r.id}: ${r.hook} · ${r.mode}`,
+                  () => ((state.rule = ruleForm(r)), redraw()),
+                  () => remove("Rule", r.id),
+                ),
               )}
-              ${state.rule ? ruleForm() : ""}
+              ${state.rule ? ruleEditor() : ""}
             </div>
             <div class="foot">
               <button
                 class="primary"
                 ?disabled=${state.saving || !!state.rule || !data.providers.length}
-                @click=${() => ((state.rule = blankRule()), showRule())}
+                @click=${() => ((state.rule = ruleForm(null)), redraw())}
               >
                 + Add rule</button
-              ><span class="status">${state.messageAt === "provider" || state.rule ? "" : state.message}</span>
+              ><span class="status">${state.message}</span>
             </div>`
         : ""
     }

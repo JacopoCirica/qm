@@ -53,7 +53,6 @@ const toRule = (r: Record<string, unknown>): DecisionRule => ({
 const RULES = "SELECT * FROM decision_rules";
 const CACHE_MS = 10_000;
 const MAX_STORED_RULES = 100;
-const MAX_PROVIDERS = 20;
 const ENFORCED_RULE = "SELECT 1 FROM decision_rules WHERE rule_id = $1 AND mode = 'enforce'";
 const ENFORCED_PROVIDER = "SELECT 1 FROM decision_rules WHERE provider_id = $1 AND mode = 'enforce'";
 const AGENT_LIMIT =
@@ -91,19 +90,14 @@ export function createPostgresDecisionStore(connectionString: string): DecisionS
       return rules;
     },
     saveProvider: (p, by) =>
-      write(by, ENFORCED_PROVIDER, p.id, async (db) => {
-        const { rows } = await db.query("SELECT count(*)::int AS n FROM decision_providers WHERE provider_id <> $1", [
-          p.id,
-        ]);
-        if (rows[0].n >= MAX_PROVIDERS)
-          throw new Error(`at most ${MAX_PROVIDERS} decision providers; remove one first`);
-        await db.query(
+      write(by, ENFORCED_PROVIDER, p.id, (db) =>
+        db.query(
           `INSERT INTO decision_providers (provider_id, protocol, base_url, credential, updated_by, updated_at)
            VALUES ($1, $2, $3, $4, $5, $6)
            ON CONFLICT (provider_id) DO UPDATE SET protocol = $2, base_url = $3, credential = $4, updated_by = $5, updated_at = $6`,
           [p.id, p.protocol, p.baseUrl ?? null, p.credential ?? null, by.actorId, Date.now()],
-        );
-      }),
+        ),
+      ),
     async removeProvider(id, by) {
       try {
         await write(by, ENFORCED_PROVIDER, id, (db) =>
