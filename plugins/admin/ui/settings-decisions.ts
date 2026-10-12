@@ -2,10 +2,11 @@ import { mountTemplate } from "./shared.ts";
 import { html } from "lit";
 import { classMap } from "lit/directives/class-map.js";
 let config: any;
+const NEW_PROVIDER = { id: "", protocol: "chat-completions", baseUrl: "", credential: "", editing: false };
 const state = {
   scope: "",
   data: null as any,
-  provider: { id: "", protocol: "chat-completions", baseUrl: "", credential: "", editing: false },
+  provider: { ...NEW_PROVIDER },
   rule: null as any,
   saving: false,
   message: "",
@@ -131,7 +132,7 @@ function saveProvider() {
   };
   void send({ provider }, () => {
     state.data.providers = upsert(state.data.providers, provider);
-    state.provider = { id: "", protocol: "chat-completions", baseUrl: "", credential: "", editing: false };
+    state.provider = { ...NEW_PROVIDER };
   });
 }
 function saveRule(rule: any) {
@@ -292,6 +293,12 @@ function template() {
                 ${field("Base URL", state.provider.baseUrl, (v) => (state.provider.baseUrl = v), "blank uses the model gateway")}
                 ${field("Credential", state.provider.credential, (v) => (state.provider.credential = v), "org service credential")}
                 <button ?disabled=${state.saving || !state.provider.id} @click=${saveProvider}>Save provider</button>
+                ${
+                  state.provider.editing
+                    ? html`<button @click=${() => ((state.provider = { ...NEW_PROVIDER }), redraw())}>Cancel</button>`
+                    : ""
+                }
+                <span class="status">${state.message}</span>
               </div>
               <h3>Rules</h3>
               ${data.rules.length ? "" : html`<div class="hint">No rules yet.</div>`}
