@@ -23,11 +23,15 @@ const sample = (value: unknown) =>
   String((typeof value === "string" ? value : JSON.stringify(value)) ?? value).slice(0, 500);
 
 function parseJson(text: string): Record<string, unknown> {
+  let parsed: unknown;
   try {
-    return JSON.parse(text) as Record<string, unknown>;
+    parsed = JSON.parse(text);
   } catch (error) {
     throw new Error(`classifier returned invalid JSON: ${sample(text)}`, { cause: error });
   }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+    throw new Error(`classifier returned a non-object JSON body: ${sample(text)}`);
+  return parsed as Record<string, unknown>;
 }
 
 function normalize(
