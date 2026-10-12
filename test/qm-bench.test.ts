@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RESTRICTED_CANARY, grade, memoryOutputs, type BenchTask } from "../src/bench/core/types.ts";
 import { allTasks, goldOutputs, verifierFor } from "../src/bench/registry.ts";
-import { buildCases, loadCases, writeCases } from "../src/bench/dataset.ts";
+import { buildCases, loadCases, parseVariants, writeCases } from "../src/bench/dataset.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -102,4 +102,10 @@ test("rebuilding a dataset directory drops files that no longer exist", () => {
   const [reloaded] = loadCases(dir);
   assert.equal(reloaded!.files["stale/left-over.txt"], undefined);
   assert.deepEqual(Object.keys(reloaded!.files).sort(), Object.keys(first!.files).sort());
+});
+
+test("parseVariants keeps each positive integer once, in the order first given", () => {
+  assert.deepEqual(parseVariants("2, 1,2,x,0,-1,1.5,3"), [2, 1, 3]);
+  const ids = buildCases(tasks.slice(0, 1), parseVariants("1,1")).map((c) => c.id);
+  assert.deepEqual(ids, [`${tasks[0]!.id}-1`]);
 });

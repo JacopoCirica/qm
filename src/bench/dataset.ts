@@ -39,6 +39,16 @@ export function buildCases(tasks: BenchTask[], variants: number[]): BenchCase[] 
   );
 }
 
+/** Case variants named by a QM_BENCH_CASES value: positive integers, each once, in the order first given. */
+export function parseVariants(spec: string): number[] {
+  const variants = new Set<number>();
+  for (const part of spec.split(",")) {
+    const n = Number(part.trim());
+    if (Number.isInteger(n) && n > 0) variants.add(n);
+  }
+  return [...variants];
+}
+
 /** Rejects a case path that could leave its root: absolute, backslashes, or a .. segment. */
 export function assertCasePath(path: string): string {
   const parts = path.split("/");

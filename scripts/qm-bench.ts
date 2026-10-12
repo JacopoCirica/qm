@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Config } from "../src/config.ts";
 import { errMessage } from "../src/util/errors.ts";
-import { buildCases, loadCases, type BenchCase } from "../src/bench/dataset.ts";
+import { buildCases, loadCases, parseVariants, type BenchCase } from "../src/bench/dataset.ts";
 import { qmLocalEnvironment, type Environment } from "../src/bench/environments/qm-local.ts";
 import { grade, memoryOutputs, type BenchTask } from "../src/bench/core/types.ts";
 import { allTasks, goldOutputs, verifierFor } from "../src/bench/registry.ts";
@@ -45,10 +45,7 @@ const taskFilter = (process.env.QM_BENCH_TASKS ?? "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
-const variants = (process.env.QM_BENCH_CASES ?? "1,2")
-  .split(",")
-  .map((s) => Number(s.trim()))
-  .filter((n) => Number.isInteger(n) && n > 0);
+const variants = parseVariants(process.env.QM_BENCH_CASES ?? "1,2");
 const runId =
   process.env.QM_BENCH_RUN_ID ??
   `${new Date().toISOString().replace(/[:.]/g, "-")}-${modelId.replace(/[^A-Za-z0-9._-]/g, "_")}`;
