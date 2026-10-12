@@ -312,7 +312,7 @@ export function createTurnSandboxes(ctx: TurnSandboxContext) {
         ? renderSkillBody(resolution, root)
         : rehomeSkillPaths(resolution, asset!, root ?? skillsRoot());
     if (!shipsFiles) return { content: render(), sourceScopeId: resolution.skill.scopeId };
-    const access = sandboxId ? await accessResource(sandboxId) : undefined;
+    const access = sandboxId !== undefined ? await accessResource(sandboxId) : undefined;
     if (access?.crossScope) return { content: render(skillsRoot()), sourceScopeId: resolution.skill.scopeId };
     const handle = access ? await provisionResource(access) : await provision();
     await materializeSkillTree(handle, resolution, sandboxId);
