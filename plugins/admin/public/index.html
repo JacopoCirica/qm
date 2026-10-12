@@ -5615,8 +5615,13 @@
         align-items: end;
         margin: 10px 0;
       }
-      #card-decisions .decision-option {
+      #card-decisions .decision-option,
+      #card-decisions .decision-question {
         grid-column: 1 / -1;
+      }
+      #card-decisions textarea {
+        width: 100%;
+        min-height: 60px;
       }
       #feature-flag-list .feature-flag-row,
       #card-decisions .feature-flag-row {

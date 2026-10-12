@@ -146,7 +146,8 @@ const row = (label: string, onEdit: () => void, onRemove: () => void) =>
   </div>`;
 function optionFields(d: any, o: any, i: number) {
   return html`<fieldset class="decision-option">
-    ${field("Option", o.key, (v) => (o.key = v))} ${field("Description", o.description, (v) => (o.description = v))}
+    ${field("Option", o.key, (v) => ((o.key = v), redraw()))}
+    ${field("Description", o.description, (v) => (o.description = v))}
     ${field("Message", o.message, (v) => (o.message = v), "optional")}
     ${select("Action", o.action, hookActions(d.hook), (v) => (o.action = v))}
     ${
@@ -176,7 +177,12 @@ function ruleEditor() {
       state.data.hooks.map((h: any) => h.id),
       set("hook"),
     )}
-    ${field("Question", d.question, set("question"))}
+    <label class="decision-question"
+      >Question<textarea
+        .value=${d.question}
+        @input=${(e: Event) => (d.question = (e.target as HTMLTextAreaElement).value)}
+      ></textarea>
+    </label>
     ${select(
       "Decision provider",
       d.provider,
