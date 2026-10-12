@@ -172,12 +172,18 @@ export function createDecisionBackend(opts: {
   };
   return {
     async choose({ questions, state, model, signal }) {
-      const provider = (await opts.providers()).find((p) => p.id === model.provider);
-      if (!provider) throw new Error(`decision provider ${model.provider} is not configured`);
-      const { base, auth } = await new Promise<Awaited<ReturnType<typeof endpoint>>>((resolve, reject) => {
+      const { provider, base, auth } = await new Promise<
+        Awaited<ReturnType<typeof endpoint>> & { provider: DecisionProvider }
+      >((resolve, reject) => {
         signal.throwIfAborted();
         signal.addEventListener("abort", () => reject(signal.reason as Error), { once: true });
-        endpoint(provider).then(resolve, reject);
+        Promise.resolve(opts.providers())
+          .then(async (list) => {
+            const provider = list.find((p) => p.id === model.provider);
+            if (!provider) throw new Error(`decision provider ${model.provider} is not configured`);
+            return { provider, ...(await endpoint(provider)) };
+          })
+          .then(resolve, reject);
       });
       const keys = Object.keys(questions);
       const wire = PROTOCOLS[provider.protocol];

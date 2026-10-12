@@ -10,6 +10,7 @@ const state = {
   rule: null as any,
   saving: false,
   message: "",
+  messageAt: "",
 };
 let redraw = () => {};
 export function configureDecisions(options: any) {
@@ -104,6 +105,7 @@ function ruleBody(d: any) {
 }
 async function send(body: any, done: () => void) {
   const scope = state.scope;
+  state.messageAt = body.provider || body.removeProvider ? "provider" : "rule";
   state.saving = true;
   state.message = "Saving…";
   redraw();
@@ -142,6 +144,7 @@ function saveRule(rule: any) {
   });
 }
 function remove(kind: "Provider" | "Rule", id: string) {
+  if (!confirm(`Remove decision ${kind.toLowerCase()} ${id}?`)) return;
   void send({ [`remove${kind}`]: id }, () => {
     const key = kind === "Provider" ? "providers" : "rules";
     state.data[key] = state.data[key].filter((x: any) => x.id !== id);
@@ -298,7 +301,7 @@ function template() {
                     ? html`<button @click=${() => ((state.provider = { ...NEW_PROVIDER }), redraw())}>Cancel</button>`
                     : ""
                 }
-                <span class="status">${state.message}</span>
+                <span class="status">${state.messageAt === "provider" ? state.message : ""}</span>
               </div>
               <h3>Rules</h3>
               ${data.rules.length ? "" : html`<div class="hint">No rules yet.</div>`}
@@ -323,7 +326,7 @@ function template() {
                 @click=${() => ((state.rule = blankRule()), showRule())}
               >
                 + Add rule</button
-              ><span class="status">${state.message}</span>
+              ><span class="status">${state.messageAt === "provider" ? "" : state.message}</span>
             </div>`
         : ""
     }
