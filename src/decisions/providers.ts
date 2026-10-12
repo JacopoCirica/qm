@@ -151,6 +151,7 @@ export function createDecisionBackend(opts: {
   fetch?: typeof fetch;
 }): DecisionBackend {
   const fetchImpl = opts.fetch ?? fetch;
+  const credentials = new Map<string, ReturnType<typeof opts.credential>>();
   const endpoint = async (provider: DecisionProvider): Promise<{ base: string; auth: Record<string, string> }> => {
     if (!provider.baseUrl) {
       if (!opts.gateway) throw new Error(`decision provider ${provider.id}: no model gateway is configured`);
@@ -160,7 +161,9 @@ export function createDecisionBackend(opts: {
         auth: header ? { [header]: opts.gateway.apiKey } : { authorization: `Bearer ${opts.gateway.apiKey}` },
       };
     }
-    const rec = await opts.credential(provider.credential!);
+    const slug = provider.credential!;
+    if (!credentials.has(slug)) credentials.set(slug, opts.credential(slug));
+    const rec = await credentials.get(slug);
     if (!rec?.enabled)
       throw new Error(`decision provider ${provider.id}: credential ${provider.credential} is missing or disabled`);
     const url = new URL(provider.baseUrl);
