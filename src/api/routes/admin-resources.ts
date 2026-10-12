@@ -224,11 +224,11 @@ export const ADMIN_RESOURCES: readonly AdminResource[] = [
       const body = ctx.body as { reset?: unknown; providers?: unknown };
       const parsed = body.reset === true ? { providers: [] } : parseDecisionProviders(body.providers);
       if ("error" in parsed) return parsed;
-      const inUse = ctx.deps
-        .config!.getDecisionRules()
-        .find((r) => !parsed.providers.some((p) => p.id === r.model.provider));
-      if (inUse) return { error: `decision rule ${inUse.id} still uses provider ${inUse.model.provider}` };
-      await ctx.deps.config!.setDecisionProviders(parsed.providers);
+      try {
+        await ctx.deps.config!.setDecisionProviders(parsed.providers);
+      } catch (error) {
+        return { error: errMessage(error) };
+      }
       return { ok: true };
     },
   },
@@ -251,7 +251,11 @@ export const ADMIN_RESOURCES: readonly AdminResource[] = [
       }
       const parsed = parseDecisionRules(body.rules, ctx.deps.config!.getDecisionProviders());
       if ("error" in parsed) return parsed;
-      await ctx.deps.config!.setDecisionRules(parsed.rules);
+      try {
+        await ctx.deps.config!.setDecisionRules(parsed.rules);
+      } catch (error) {
+        return { error: errMessage(error) };
+      }
       return { ok: true };
     },
   },

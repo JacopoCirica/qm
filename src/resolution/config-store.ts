@@ -393,6 +393,18 @@ export function createMemoryConfigStore(
     pendingWrites.set(key, pending);
     void pending.catch(persistWarn(what));
   };
+  const persistAwaited = (key: string, op: () => Promise<void>): Promise<void> => {
+    const pending = writeQueue(key, op);
+    const settled: Promise<void> = pending.then(
+      () => undefined,
+      () => undefined,
+    );
+    pendingWrites.set(key, settled);
+    void settled.then(() => {
+      if (pendingWrites.get(key) === settled) pendingWrites.delete(key);
+    });
+    return pending;
+  };
   const channelHeaderPinListeners = new Set<(id: ScopeId) => void>();
   const noteChannelHeaderPinChanged = (id: ScopeId): void => {
     for (const listener of channelHeaderPinListeners) {
@@ -1140,19 +1152,23 @@ export function createMemoryConfigStore(
     },
     getDecisionProviders: () => decisionProviders,
     async setDecisionProviders(providers) {
-      await writeQueue(`decisionProviders:${org}`, () =>
-        providers.length
+      await persistAwaited(`decisions:${org}`, async () => {
+        const orphan = decisionRules.find((r) => !providers.some((p) => p.id === r.model.provider));
+        if (orphan) throw new Error(`decision rule ${orphan.id} still uses provider ${orphan.model.provider}`);
+        await (providers.length
           ? decisionProvidersStore.put(org, { scopeId: org, providers })
-          : decisionProvidersStore.delete(org),
-      );
-      decisionProviders = providers;
+          : decisionProvidersStore.delete(org));
+        decisionProviders = providers;
+      });
     },
     getDecisionRules: () => decisionRules,
     async setDecisionRules(rules) {
-      await writeQueue(`decisionRules:${org}`, () =>
-        rules.length ? decisionRulesStore.put(org, { scopeId: org, rules }) : decisionRulesStore.delete(org),
-      );
-      decisionRules = rules;
+      await persistAwaited(`decisions:${org}`, async () => {
+        const missing = rules.find((r) => !decisionProviders.some((p) => p.id === r.model.provider));
+        if (missing) throw new Error(`decision rule ${missing.id} uses unknown provider ${missing.model.provider}`);
+        await (rules.length ? decisionRulesStore.put(org, { scopeId: org, rules }) : decisionRulesStore.delete(org));
+        decisionRules = rules;
+      });
     },
     getTurnWallClockSecDurable: async (id) => (await turnWallClockStore.get(id))?.sec ?? null,
     async setTurnWallClockSec(id, sec) {
@@ -1347,8 +1363,7 @@ export function createMemoryConfigStore(
               `interactiveFastMode:${org}`,
               `individualModelAuth:${org}`,
               `autoFlagger:${org}`,
-              `decisionRules:${org}`,
-              `decisionProviders:${org}`,
+              `decisions:${org}`,
             ]
           : []),
         `channelHeaderPin:${id}`,
