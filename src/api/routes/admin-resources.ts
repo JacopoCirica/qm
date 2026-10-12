@@ -245,11 +245,8 @@ export const ADMIN_RESOURCES: readonly AdminResource[] = [
       const bad = orgOnly(scope, "decision rules are org-wide");
       if (bad) return bad;
       const body = ctx.body as { reset?: unknown; rules?: unknown };
-      if (body.reset === true) {
-        await ctx.deps.config!.setDecisionRules([]);
-        return { ok: true };
-      }
-      const parsed = parseDecisionRules(body.rules, ctx.deps.config!.getDecisionProviders());
+      const parsed =
+        body.reset === true ? { rules: [] } : parseDecisionRules(body.rules, ctx.deps.config!.getDecisionProviders());
       if ("error" in parsed) return parsed;
       try {
         await ctx.deps.config!.setDecisionRules(parsed.rules);
