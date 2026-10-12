@@ -44,15 +44,19 @@ function ruleForm(r: any) {
     options: Object.entries(r?.options || { a: {}, b: {} }).map(([k, o]) => option(k, o, hook)),
   };
 }
+function openRule(r: any) {
+  state.rule = ruleForm(r);
+  redraw();
+  document.querySelector("#card-decisions .decision-rule")?.scrollIntoView({ block: "nearest" });
+}
 function ruleBody(d: any) {
-  const keys = d.options.map((o: any) => o.key);
   return {
     id: d.id,
     hook: d.hook,
     question: d.question,
     model: { provider: d.provider, model: d.model },
     mode: d.mode,
-    onError: keys.includes(d.onError) ? d.onError : keys[0],
+    onError: d.onError,
     options: Object.fromEntries(
       d.options.map((o: any) => [
         o.key,
@@ -160,7 +164,7 @@ function optionFields(d: any, o: any, i: number) {
 function ruleEditor() {
   const d = state.rule;
   const set = (key: string) => (v: string) => (d[key] = v);
-  return html`<div class="decision-form">
+  return html`<div class="decision-form decision-rule">
     ${field("Rule id", d.id, set("id"), "e.g. hard-tasks")}
     ${select(
       "Hook",
@@ -177,12 +181,7 @@ function ruleEditor() {
     )}
     ${field("Decision model", d.model, set("model"), "model served by the provider")}
     ${select("Mode", d.mode, state.data.modes, set("mode"))}
-    ${select(
-      "On error",
-      d.onError,
-      d.options.map((o: any) => o.key),
-      set("onError"),
-    )}
+    ${select("On error", d.onError, ["", ...d.options.map((o: any) => o.key)], set("onError"))}
     ${d.options.map((o: any, i: number) => optionFields(d, o, i))}
     <div>
       <button @click=${() => (d.options.push(option("", {}, d.hook)), redraw())}>+ Option</button>
@@ -224,7 +223,7 @@ function template() {
               ${data.rules.map((r: any) =>
                 row(
                   `${r.id}: ${r.hook} · ${r.mode}`,
-                  () => ((state.rule = ruleForm(r)), redraw()),
+                  () => openRule(r),
                   () => remove("Rule", r.id),
                 ),
               )}
@@ -234,7 +233,7 @@ function template() {
               <button
                 class="primary"
                 ?disabled=${state.saving || !!state.rule || !data.providers.length}
-                @click=${() => ((state.rule = ruleForm(null)), redraw())}
+                @click=${() => openRule(null)}
               >
                 + Add rule</button
               ><span class="status">${state.message}</span>
