@@ -210,8 +210,11 @@ export function checkRuleSet(all: readonly DecisionRule[]): string | undefined {
   return undefined;
 }
 
-export const decisionHookCatalog = () =>
-  LIVE_DECISION_HOOKS.map((id) => ({ id, actions: DECISION_HOOK_POINTS[id].actions }));
+export const decisionCatalog = () => ({
+  hooks: LIVE_DECISION_HOOKS.map((id) => ({ id, actions: DECISION_HOOK_POINTS[id].actions })),
+  protocols: DECISION_PROTOCOLS,
+  modes: DECISION_MODES,
+});
 
 function pick(rule: DecisionRule, probabilities: Record<string, number>): string {
   let best = rule.onError;

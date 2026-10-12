@@ -2,7 +2,6 @@ import { mountTemplate } from "./shared.ts";
 import { html } from "lit";
 import { classMap } from "lit/directives/class-map.js";
 let config: any;
-const PROTOCOLS = ["chat-completions", "decisions", "systemone"];
 const state = {
   scope: "",
   data: null as any,
@@ -97,7 +96,6 @@ async function send(body: any, done: () => void) {
   redraw();
   try {
     const result = await config.save(scope, body);
-    if (scope !== state.scope) return;
     if (!result.ok) state.message = result.error || result.data?.message || "Save failed.";
     else {
       done();
@@ -177,7 +175,7 @@ function ruleForm() {
       (v) => (d.provider = v),
     )}
     ${field("Decision model", d.model, (v) => (d.model = v), "model served by the provider")}
-    ${select("Mode", d.mode, ["off", "observe", "enforce"], (v) => (d.mode = v))}
+    ${select("Mode", d.mode, state.data.modes, (v) => (d.mode = v))}
     ${d.options.map(
       (o: any, i: number) =>
         html`<fieldset class="decision-option">
@@ -255,7 +253,7 @@ function template() {
               )}
               <div class="decision-provider-form">
                 ${field("Provider id", state.provider.id, (v) => (state.provider.id = v))}
-                ${select("Protocol", state.provider.protocol, PROTOCOLS, (v) => (state.provider.protocol = v))}
+                ${select("Protocol", state.provider.protocol, data.protocols, (v) => (state.provider.protocol = v))}
                 ${field("Base URL", state.provider.baseUrl, (v) => (state.provider.baseUrl = v), "blank uses the model gateway")}
                 ${field("Credential", state.provider.credential, (v) => (state.provider.credential = v), "org service credential")}
                 <button ?disabled=${state.saving || !state.provider.id} @click=${saveProvider}>Save provider</button>

@@ -1,5 +1,5 @@
 import type { TeamChange } from "../../teams/teams.ts";
-import { decisionHookCatalog, parseDecisionProvider, parseDecisionRule } from "../../decisions/decisions.ts";
+import { decisionCatalog, parseDecisionProvider, parseDecisionRule } from "../../decisions/decisions.ts";
 import { parseAckEmoji } from "../../slack/config.ts";
 import { orgId as configOrgId } from "../../config.ts";
 import type { ServerDeps } from "../deps.ts";
@@ -218,7 +218,7 @@ export const ADMIN_RESOURCES: readonly AdminResource[] = [
     readKey: "decisions",
     get: async (deps) =>
       deps.decisions && {
-        hooks: decisionHookCatalog(),
+        ...decisionCatalog(),
         models: selectableBaseModels(),
         providers: await deps.decisions.providers(),
         rules: await deps.decisions.rules(),

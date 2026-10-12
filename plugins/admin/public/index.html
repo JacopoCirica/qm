@@ -5625,13 +5625,15 @@
         grid-column: 1 / -1;
         min-height: 60px;
       }
-      #feature-flag-list .feature-flag-row {
+      #feature-flag-list .feature-flag-row,
+      #card-decisions .feature-flag-row {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
         gap: 12px;
         align-items: center;
       }
-      #feature-flag-list .feature-flag-row code {
+      #feature-flag-list .feature-flag-row code,
+      #card-decisions .feature-flag-row code {
         min-width: 0;
         overflow-wrap: anywhere;
       }

@@ -1476,25 +1476,28 @@ export function buildApp(
       return defaultForHarness(fallbackHarness);
     },
   };
-  const decisionBackend =
-    overrides.decisionBackend ??
-    createDecisionBackend({
-      providers: () => decisions?.providers() ?? [],
-      ...(config.modelGateway?.apiKey
-        ? {
-            gateway: {
-              url: config.modelGateway.url,
-              apiKey: config.modelGateway.apiKey,
-              ...(config.modelGateway.apiKeyHeader ? { apiKeyHeader: config.modelGateway.apiKeyHeader } : {}),
-            },
-          }
-        : {}),
-      credential: async (slug) => {
-        const rec = await keychain?.getServiceCredentialSecret(scopeId("org", config.orgId), slug);
-        return rec ? { host: rec.host, enabled: rec.enabled, header: brokerCredentialAuthHeader(rec) } : null;
-      },
-    });
-  const decide = createDecisionHooks(decisions, decisionBackend, auditLog);
+  const decide = createDecisionHooks(
+    decisions,
+    (providers) =>
+      overrides.decisionBackend ??
+      createDecisionBackend({
+        providers,
+        ...(config.modelGateway?.apiKey
+          ? {
+              gateway: {
+                url: config.modelGateway.url,
+                apiKey: config.modelGateway.apiKey,
+                ...(config.modelGateway.apiKeyHeader ? { apiKeyHeader: config.modelGateway.apiKeyHeader } : {}),
+              },
+            }
+          : {}),
+        credential: async (slug) => {
+          const rec = await keychain?.getServiceCredentialSecret(scopeId("org", config.orgId), slug);
+          return rec ? { host: rec.host, enabled: rec.enabled, header: brokerCredentialAuthHeader(rec) } : null;
+        },
+      }),
+    auditLog,
+  );
   const judgeModelId = (): string => config.judgeModelId ?? auxiliaryModelFor(orgBaseModelId() ?? fallback.modelId);
   const hydrateModelCatalog = async (): Promise<unknown> => {
     await refreshModels();
