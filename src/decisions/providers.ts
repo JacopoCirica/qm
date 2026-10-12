@@ -4,15 +4,18 @@ import { asError, type DecisionBackend, type DecisionProvider, type DecisionQues
 const MAX_RESPONSE_BYTES = 1_000_000;
 
 async function readCapped(response: Response): Promise<string> {
-  const chunks: Uint8Array[] = [];
+  const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of (response.body ?? []) as AsyncIterable<Uint8Array>) {
+    if (size + chunk.byteLength > MAX_RESPONSE_BYTES) {
+      const prefix = Buffer.concat([...chunks, Buffer.from(chunk.subarray(0, 300))])
+        .subarray(0, 300)
+        .toString("utf8");
+      await response.body?.cancel();
+      throw new Error(`classifier HTTP ${response.status}: response over ${MAX_RESPONSE_BYTES} bytes: ${prefix}`);
+    }
     size += chunk.byteLength;
-    chunks.push(chunk);
-    if (size > MAX_RESPONSE_BYTES)
-      throw new Error(
-        `classifier HTTP ${response.status}: response over ${MAX_RESPONSE_BYTES} bytes: ${sample(Buffer.concat(chunks).toString("utf8"))}`,
-      );
+    chunks.push(Buffer.from(chunk));
   }
   return Buffer.concat(chunks).toString("utf8");
 }
@@ -47,7 +50,8 @@ function normalize(
     out[key] = p;
     total += p;
   }
-  if (total <= 0) throw new Error(`classifier returned no usable probabilities: ${sample(response)}`);
+  if (!(total > 0) || !Number.isFinite(total))
+    throw new Error(`classifier returned no usable probabilities: ${sample(response)}`);
   for (const key of Object.keys(out)) out[key] = out[key]! / total;
   return out;
 }
