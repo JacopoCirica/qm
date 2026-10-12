@@ -15,7 +15,7 @@ export const decisionsResource: AdminResource = {
   get: async (deps) =>
     deps.decisions && {
       ...decisionCatalog(),
-      models: selectableBaseModels(),
+      models: selectableBaseModels().map((m) => m.id),
       providers: await deps.decisions.providers(),
       rules: await deps.decisions.rules(),
     },

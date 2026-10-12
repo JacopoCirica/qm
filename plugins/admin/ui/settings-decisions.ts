@@ -167,7 +167,7 @@ const select = (label: string, value: string, values: readonly string[], set: (v
 function ruleForm() {
   const d = state.rule;
   const actions = hookActions(d.hook);
-  const models = state.data.models.map((m: any) => m.id);
+  const models = state.data.models;
   return html`<div class="decision-rule-form">
     ${field("Rule id", d.id, (v) => (d.id = v), "e.g. hard-tasks", d.editing)}
     ${select(
