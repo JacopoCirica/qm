@@ -1153,7 +1153,8 @@ export function createMemoryConfigStore(
     getDecisionProviders: () => decisionProviders,
     async setDecisionProviders(providers) {
       await persistAwaited(`decisions:${org}`, async () => {
-        const orphan = decisionRules.find((r) => !providers.some((p) => p.id === r.model.provider));
+        const stored = (await decisionRulesStore.get(org))?.rules ?? [];
+        const orphan = stored.find((r) => !providers.some((p) => p.id === r.model.provider));
         if (orphan) throw new Error(`decision rule ${orphan.id} still uses provider ${orphan.model.provider}`);
         await (providers.length
           ? decisionProvidersStore.put(org, { scopeId: org, providers })
@@ -1164,7 +1165,8 @@ export function createMemoryConfigStore(
     getDecisionRules: () => decisionRules,
     async setDecisionRules(rules) {
       await persistAwaited(`decisions:${org}`, async () => {
-        const missing = rules.find((r) => !decisionProviders.some((p) => p.id === r.model.provider));
+        const known = (await decisionProvidersStore.get(org))?.providers ?? [];
+        const missing = rules.find((r) => !known.some((p) => p.id === r.model.provider));
         if (missing) throw new Error(`decision rule ${missing.id} uses unknown provider ${missing.model.provider}`);
         await (rules.length ? decisionRulesStore.put(org, { scopeId: org, rules }) : decisionRulesStore.delete(org));
         decisionRules = rules;

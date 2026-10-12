@@ -182,7 +182,7 @@ export function parseDecisionRules(
     }
     const count = Object.keys(options).length;
     if (count < 2 || count > MAX_OPTIONS) return { error: `${r.id}: needs 2 to ${MAX_OPTIONS} options` };
-    if (typeof r.onError !== "string" || !(r.onError in options))
+    if (typeof r.onError !== "string" || !Object.hasOwn(options, r.onError))
       return { error: `${r.id}: onError must name one of its options` };
     const m = (r.model ?? {}) as Record<string, unknown>;
     if (typeof m.provider !== "string" || !providers.some((p) => p.id === m.provider))
