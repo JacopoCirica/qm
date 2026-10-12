@@ -172,6 +172,27 @@ async function setWebhookEnabled(ctx: ApiCtx, enabled: boolean): Promise<void> {
   return sendJson(res, 200, { ok: true });
 }
 
+async function updateWebhook(ctx: ApiCtx): Promise<void> {
+  const { res, app, deps, params, capability, actor, url, body } = ctx;
+  const action = isObj(body) && typeof body.action === "string" ? body.action : undefined;
+  if (action === undefined || !action.trim())
+    return sendJson(res, 400, { error: "bad_request", message: "expected a non-empty { action }" });
+  if (!capability) {
+    const principalId = actor?.p ?? url.searchParams.get("principalId");
+    const webhook = await app.getWebhook(params.id!);
+    if (!principalId || !webhook || !(await canAdministerWebhook(app, webhook, principalId)))
+      return sendJson(res, 404, { error: "not_found" });
+    const updated = await app.updateWebhook(webhook.id, { action });
+    if (!updated) return sendJson(res, 404, { error: "not_found" });
+    return sendJson(res, 200, { webhook: redactWebhook(updated), url: inboundUrl(deps.publicUrl, updated.id) });
+  }
+  const r = await deps.control.updateWebhook(params.id!, { action }, capability);
+  if (!r.ok) return sendJson(res, WEBHOOK_UPDATE_STATUS[r.code] ?? 400, { error: r.code, message: r.message });
+  return sendJson(res, 200, { webhook: redactWebhook(r.webhook), url: inboundUrl(deps.publicUrl, r.webhook.id) });
+}
+
+const WEBHOOK_UPDATE_STATUS: Record<string, number> = { not_found: 404, forbidden: 403, bad_request: 400 };
+
 const disableWebhook = (ctx: ApiCtx): Promise<void> => setWebhookEnabled(ctx, false);
 const enableWebhook = (ctx: ApiCtx): Promise<void> => setWebhookEnabled(ctx, true);
 
@@ -183,6 +204,7 @@ export const webhookRoutes: ReadonlyArray<Route<ApiCtx>> = [
   { method: "POST", path: "/v1/webhooks", auth: "either", handle: createWebhook },
   { method: "GET", path: "/v1/webhooks", auth: "either", handle: listWebhooks },
   { method: "GET", path: "/v1/webhooks/:id/events", auth: "either", handle: listWebhookEvents },
+  { method: "POST", path: "/v1/webhooks/:id/update", auth: "either", handle: updateWebhook },
   { method: "POST", path: "/v1/webhooks/:id/disable", auth: "either", handle: disableWebhook },
   { method: "POST", path: "/v1/webhooks/:id/enable", auth: "either", handle: enableWebhook },
 ];

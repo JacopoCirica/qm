@@ -170,6 +170,11 @@ export interface ControlService {
     id: string,
     claims: CapabilityClaims,
   ): Promise<ControlOk<Record<never, never>> | ControlErr<"not_found" | "forbidden">>;
+  updateWebhook(
+    id: string,
+    patch: { action: string },
+    claims: CapabilityClaims,
+  ): Promise<ControlOk<{ webhook: Webhook }> | ControlErr<"not_found" | "forbidden" | "bad_request">>;
   readSoul(claims: CapabilityClaims): { effectiveSoul: string; soul: string | null; soulVersion: number };
   writeSoul(
     content: string,
@@ -886,6 +891,19 @@ export function createControlService(app: App, scheduler?: Scheduler, admin?: Ad
         return { ok: false, code: "forbidden", message: "not your webhook" };
       await app.setWebhookEnabled(id, false);
       return { ok: true };
+    },
+
+    async updateWebhook(id, patch, capability) {
+      if (capability.triggered || !livePersonCapability(capability))
+        return { ok: false, code: "forbidden", message: "editing a webhook requires a live turn started by its owner" };
+      if (!patch.action.trim()) return { ok: false, code: "bad_request", message: "task cannot be empty" };
+      const before = await app.getWebhook(id);
+      if (!before) return { ok: false, code: "not_found", message: `no webhook ${id}` };
+      if (!(await canAdministerWebhook(app, before, capability.actorId)))
+        return { ok: false, code: "forbidden", message: "not your webhook" };
+      const webhook = await app.updateWebhook(id, { action: patch.action });
+      if (!webhook) return { ok: false, code: "not_found", message: `no webhook ${id}` };
+      return { ok: true, webhook };
     },
 
     readSoul(capability) {
