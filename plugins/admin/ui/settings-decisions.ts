@@ -18,7 +18,6 @@ export function loadDecisions(data: any, scope: string) {
   state.scope = scope;
   state.data = scope.startsWith("org:") ? data.decisions || null : null;
   state.rule = null;
-  state.message = "";
   redraw();
 }
 const hookActions = (hook: string) => state.data.hooks.find((h: any) => h.id === hook)?.actions || [];
@@ -246,9 +245,17 @@ function template() {
                     <code
                       >${p.id}:
                       ${p.protocol}${p.baseUrl ? ` · ${p.baseUrl} · ${p.credential}` : " · model gateway"}</code
-                    ><button class="danger" ?disabled=${state.saving} @click=${() => remove("Provider", p.id)}>
-                      Remove
-                    </button>
+                    ><span>
+                      <button
+                        ?disabled=${state.saving}
+                        @click=${() => ((state.provider = { baseUrl: "", credential: "", ...p }), redraw())}
+                      >
+                        Edit
+                      </button>
+                      <button class="danger" ?disabled=${state.saving} @click=${() => remove("Provider", p.id)}>
+                        Remove
+                      </button>
+                    </span>
                   </div>`,
               )}
               <div class="decision-provider-form">

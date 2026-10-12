@@ -214,7 +214,7 @@ export const ADMIN_RESOURCES: readonly AdminResource[] = [
     kind: "custom",
     target: "org",
     label:
-      "Decision providers and rules. Send { provider }, { removeProvider: id }, { rule } or { removeRule: id }. A provider names a wire protocol (chat-completions, decisions or systemone); leave baseUrl unset to use the model gateway, or set baseUrl plus an org service credential. A rule asks a classifier a question at a hook and applies the chosen option's action. Rule mode is off, observe or enforce; rules saved by an agent must be off or observe, and an admin enforces them from the dashboard.",
+      "Decision providers and rules. Send { provider }, { removeProvider: id }, { rule } or { removeRule: id }. A provider names a wire protocol (chat-completions, decisions or systemone); leave baseUrl unset to use the model gateway, or set baseUrl plus an org service credential. A rule asks a classifier a question at a hook and applies the chosen option's action. Rule mode is off, observe or enforce. Agents can save off or observe rules; only an admin enforces a rule or changes an enforced rule or its provider.",
     readKey: "decisions",
     get: async (deps) =>
       deps.decisions && {
@@ -229,6 +229,20 @@ export const ADMIN_RESOURCES: readonly AdminResource[] = [
       const store = ctx.deps.decisions;
       if (!store) return { error: "not available on this deployment", status: 404 };
       const body = (ctx.body ?? {}) as Record<string, unknown>;
+      if (ctx.capability) {
+        const id = (key: string) => body[key] as string | undefined;
+        const rule = body.rule as { id?: unknown; mode?: unknown } | undefined;
+        const provider = id("removeProvider") ?? (body.provider as { id?: string } | undefined)?.id;
+        const enforced = (await store.rules()).filter((r) => r.mode === "enforce");
+        if (
+          rule?.mode === "enforce" ||
+          enforced.some((r) => r.id === (id("removeRule") ?? rule?.id) || r.model.provider === provider)
+        )
+          return {
+            error:
+              "agents can't enforce decision rules or change enforced rules and their providers; an admin does that from the dashboard",
+          };
+      }
       let change: [string, string];
       try {
         if (typeof body.removeProvider === "string") {
@@ -246,8 +260,6 @@ export const ADMIN_RESOURCES: readonly AdminResource[] = [
           const models = new Set(selectableBaseModels().map((m) => m.id));
           const parsed = parseDecisionRule(body.rule, await store.providers(), models);
           if ("error" in parsed) return parsed;
-          if (ctx.capability && parsed.rule.mode === "enforce")
-            return { error: "agents save decision rules as off or observe; an admin enforces them from the dashboard" };
           await store.saveRule(parsed.rule, actor.id);
           change = ["decision.rule.save", `${parsed.rule.id}:${parsed.rule.mode}`];
         } else return { error: "send provider, removeProvider, rule or removeRule" };

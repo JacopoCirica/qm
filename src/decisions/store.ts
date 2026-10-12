@@ -28,7 +28,6 @@ const SCHEMA = [
     model       TEXT    NOT NULL,
     mode        TEXT    NOT NULL CHECK (mode IN ('off', 'observe', 'enforce')),
     on_error    TEXT    NOT NULL,
-    version     INT     NOT NULL DEFAULT 1,
     updated_by  TEXT    NOT NULL,
     updated_at  BIGINT  NOT NULL
   )`,
@@ -47,9 +46,14 @@ const toRule = (r: Record<string, unknown>): DecisionRule => ({
 
 const RULES = "SELECT * FROM decision_rules";
 const MAX_STORED_RULES = 200;
+const CACHE_MS = 10_000;
 
 export function createPostgresDecisionStore(connectionString: string): DecisionStore {
   const { q, pool } = createPgPool(connectionString, "decisions/0001", SCHEMA);
+  const active = new Map<DecisionHook, { at: number; rules: Promise<DecisionRule[]> }>();
+  const load = async (hook: DecisionHook) =>
+    (await q(`${RULES} WHERE hook = $1 AND mode <> 'off' ORDER BY rule_id`, [hook])).map(toRule);
+  const changed = () => active.clear();
   return {
     async providers() {
       const rows = await q("SELECT * FROM decision_providers ORDER BY provider_id");
@@ -60,10 +64,13 @@ export function createPostgresDecisionStore(connectionString: string): DecisionS
       }));
     },
     async rules(hook) {
-      const rows = hook
-        ? await q(`${RULES} WHERE hook = $1 AND mode <> 'off' ORDER BY rule_id`, [hook])
-        : await q(`${RULES} ORDER BY rule_id`);
-      return rows.map(toRule);
+      if (!hook) return (await q(`${RULES} ORDER BY rule_id`)).map(toRule);
+      const hit = active.get(hook);
+      if (hit && Date.now() - hit.at < CACHE_MS) return hit.rules;
+      const rules = load(hook);
+      active.set(hook, { at: Date.now(), rules });
+      rules.catch(() => active.delete(hook));
+      return rules;
     },
     async saveProvider(p, actorId) {
       await q(
@@ -99,8 +106,7 @@ export function createPostgresDecisionStore(connectionString: string): DecisionS
              (rule_id, hook, question, options, provider_id, model, mode, on_error, updated_by, updated_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
            ON CONFLICT (rule_id) DO UPDATE SET hook = $2, question = $3, options = $4, provider_id = $5, model = $6,
-             mode = $7, on_error = $8, updated_by = $9, updated_at = $10,
-             version = decision_rules.version + 1`,
+             mode = $7, on_error = $8, updated_by = $9, updated_at = $10`,
           [
             rule.id,
             rule.hook,
@@ -115,9 +121,11 @@ export function createPostgresDecisionStore(connectionString: string): DecisionS
           ],
         );
       });
+      changed();
     },
     async removeRule(id) {
       await q("DELETE FROM decision_rules WHERE rule_id = $1", [id]);
+      changed();
     },
   };
 }

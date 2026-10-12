@@ -5621,8 +5621,11 @@
         border-radius: 6px;
         padding: 8px 10px;
       }
-      #card-decisions textarea {
+      #card-decisions label:has(textarea) {
         grid-column: 1 / -1;
+      }
+      #card-decisions textarea {
+        width: 100%;
         min-height: 60px;
       }
       #feature-flag-list .feature-flag-row,
