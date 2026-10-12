@@ -150,7 +150,8 @@ export function parseDecisionRules(
       const allowed = DECISION_HOOK_POINTS[r.hook as DecisionHook].actions as readonly string[];
       if (!allowed.includes(o.action as string))
         return { error: `${r.id}.${key}: action at ${String(r.hook)} must be one of ${allowed.join(", ")}` };
-      if (o.message !== undefined && typeof o.message !== "string") return { error: `${r.id}.${key}: bad message` };
+      if (o.message !== undefined && (typeof o.message !== "string" || o.message.length > MAX_TEXT_CHARS))
+        return { error: `${r.id}.${key}: message must be a string of at most ${MAX_TEXT_CHARS} characters` };
       const rt = o.runtime as Record<string, unknown> | undefined;
       if ((o.action === "use_runtime") !== (rt !== undefined))
         return { error: `${r.id}.${key}: runtime is required with use_runtime and only allowed there` };
