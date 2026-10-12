@@ -1,16 +1,16 @@
-export const DECISION_HOOK_POINTS = {
+const DECISION_HOOK_POINTS = {
   user_input: { actions: ["allow", "block"], decide: "most_restrictive" },
   tool_response: { actions: ["allow", "block"], decide: "most_restrictive" },
   turn_start: { actions: ["keep", "use_runtime"], decide: "most_confident" },
   goal_check: { actions: ["continue", "complete", "step_back", "pause"], decide: "most_confident" },
 } as const satisfies Record<string, { actions: readonly string[]; decide: "most_restrictive" | "most_confident" }>;
 export type DecisionHook = keyof typeof DECISION_HOOK_POINTS;
-export type DecisionAction<H extends DecisionHook = DecisionHook> = (typeof DECISION_HOOK_POINTS)[H]["actions"][number];
+type DecisionAction<H extends DecisionHook = DecisionHook> = (typeof DECISION_HOOK_POINTS)[H]["actions"][number];
 const DECISION_HOOKS = Object.keys(DECISION_HOOK_POINTS) as DecisionHook[];
 const rank = (hook: DecisionHook, action: string) =>
   (DECISION_HOOK_POINTS[hook].actions as readonly string[]).indexOf(action);
 
-export interface RuntimeParams {
+interface RuntimeParams {
   modelId: string;
   effortLevel?: string;
   fastMode?: boolean;
@@ -73,11 +73,9 @@ export interface DecisionBackend {
 }
 
 const RULE_ID = /^[a-z0-9][a-z0-9._-]{0,63}$/;
-const OPTION_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+const ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const MAX_RULES = 32;
 const MAX_STATE_CHARS = 16_000;
-
-const PROVIDER_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
 export function parseDecisionProviders(value: unknown): { providers: DecisionProvider[] } | { error: string } {
   if (!Array.isArray(value)) return { error: "decision providers must be an array" };
@@ -85,8 +83,7 @@ export function parseDecisionProviders(value: unknown): { providers: DecisionPro
   const providers: DecisionProvider[] = [];
   for (const [i, raw] of value.entries()) {
     const r = (raw ?? {}) as Record<string, unknown>;
-    if (typeof r.id !== "string" || !PROVIDER_ID.test(r.id))
-      return { error: `provider ${i}: id must match ${PROVIDER_ID}` };
+    if (typeof r.id !== "string" || !ID.test(r.id)) return { error: `provider ${i}: id must match ${ID}` };
     if (ids.has(r.id)) return { error: `provider ${r.id}: duplicate id` };
     ids.add(r.id);
     if (!DECISION_PROTOCOLS.includes(r.protocol as DecisionProvider["protocol"]))
@@ -95,7 +92,7 @@ export function parseDecisionProviders(value: unknown): { providers: DecisionPro
       return {
         error: `provider ${r.id}: set baseUrl and credential together, or neither to use the model gateway`,
       };
-    if (r.credential !== undefined && (typeof r.credential !== "string" || !PROVIDER_ID.test(r.credential)))
+    if (r.credential !== undefined && (typeof r.credential !== "string" || !ID.test(r.credential)))
       return { error: `provider ${r.id}: credential must name an org service credential` };
     if (r.baseUrl !== undefined) {
       let url: URL;
@@ -139,7 +136,7 @@ export function parseDecisionRules(
       return { error: `${r.id}: options must be an object` };
     const options: Record<string, DecisionOption> = {};
     for (const [key, opt] of Object.entries(r.options as Record<string, unknown>)) {
-      if (!OPTION_ID.test(key)) return { error: `${r.id}: option ${key} must match ${OPTION_ID}` };
+      if (!ID.test(key)) return { error: `${r.id}: option ${key} must match ${ID}` };
       const o = opt as Record<string, unknown> | null;
       if (typeof o?.description !== "string" || !o.description.trim())
         return { error: `${r.id}.${key}: description is required` };
@@ -349,6 +346,57 @@ function choiceProbabilities(answer: unknown): Record<string, unknown> {
   return (a.probabilities ?? {}) as Record<string, unknown>;
 }
 
+type Questions = Record<string, DecisionQuestion>;
+const typesafeQuestions = (questions: Questions) =>
+  Object.fromEntries(
+    Object.entries(questions).map(([k, q]) => [k, { type: "choice", instructions: q.question, criteria: q.options }]),
+  );
+const byKey = (answers: unknown) => (k: string) => ((answers ?? {}) as Record<string, unknown>)[k];
+
+/** Each wire protocol maps one request/response shape onto questions in, per-option probabilities out. */
+const PROTOCOLS: Record<
+  DecisionProvider["protocol"],
+  {
+    path: string;
+    request: (model: string, questions: Questions, state: string) => unknown;
+    answers: (body: Record<string, unknown>) => (key: string) => unknown;
+  }
+> = {
+  decisions: {
+    path: "/decisions",
+    request: (model, questions, state) => ({
+      model,
+      input: state,
+      questions: Object.entries(questions).map(([name, q]) => ({
+        type: "choice",
+        name,
+        instructions: q.question,
+        choices: Object.entries(q.options).map(([value, description]) => ({ value, description })),
+      })),
+    }),
+    answers: (body) => (k) => ((body.answers as { name?: string }[] | undefined) ?? []).find((a) => a.name === k),
+  },
+  systemone: {
+    path: "/systemone",
+    request: (model, questions, state) => ({ state, model, questions: typesafeQuestions(questions) }),
+    answers: (body) => byKey(body.answers),
+  },
+  "chat-completions": {
+    path: "/chat/completions",
+    request: (model, questions, state) => ({
+      model,
+      messages: [],
+      typesafe: { questions: typesafeQuestions(questions), state },
+    }),
+    answers: (body) => {
+      const content = (body.choices as { message?: { content?: string } }[] | undefined)?.[0]?.message?.content;
+      if (typeof content !== "string") throw new Error(`classifier returned no message content: ${sample(body)}`);
+      const parsed = parseJson(content);
+      return byKey(parsed.answers ?? parsed);
+    },
+  },
+};
+
 export function createDecisionBackend(opts: {
   providers: () => readonly DecisionProvider[];
   gateway?: { url: string; apiKey: string; apiKeyHeader?: string };
@@ -381,73 +429,27 @@ export function createDecisionBackend(opts: {
       if (!provider) throw new Error(`decision provider ${model.provider} is not configured`);
       const { base, auth } = await endpoint(provider);
       const keys = Object.keys(questions);
-      const answerEach = (read: (key: string) => Record<string, number>) =>
-        Object.fromEntries(
-          keys.map((k) => {
-            try {
-              return [k, read(k)];
-            } catch (error) {
-              return [k, error instanceof Error ? error : new Error(String(error))];
-            }
-          }),
-        );
-
-      if (provider.protocol === "decisions") {
-        const body = await postJson(
-          fetchImpl,
-          `${base}/decisions`,
-          auth,
-          {
-            model: model.model,
-            input: state,
-            questions: keys.map((name) => ({
-              type: "choice",
-              name,
-              instructions: questions[name]!.question,
-              choices: Object.entries(questions[name]!.options).map(([value, description]) => ({ value, description })),
-            })),
-          },
-          signal,
-        );
-        const answers = (body.answers as { name?: string; type?: string }[] | undefined) ?? [];
-        return answerEach((k) => {
-          const answer = answers.find((a) => a.name === k);
-          if (answer?.type === "refusal") throw new Error(`decision provider refused: ${sample(answer)}`);
-          return normalize(choiceProbabilities(answer), questions[k]!.options, body);
-        });
-      }
-
-      const typesafeQuestions = Object.fromEntries(
-        keys.map((k) => [k, { type: "choice", instructions: questions[k]!.question, criteria: questions[k]!.options }]),
-      );
-      if (provider.protocol === "systemone") {
-        const body = await postJson(
-          fetchImpl,
-          `${base}/systemone`,
-          auth,
-          { state, model: model.model, questions: typesafeQuestions },
-          signal,
-        );
-        const answers = (body.answers ?? {}) as Record<string, unknown>;
-        return answerEach((k) => normalize(choiceProbabilities(answers[k]), questions[k]!.options, body));
-      }
-
+      const wire = PROTOCOLS[provider.protocol];
       const body = await postJson(
         fetchImpl,
-        `${base}/chat/completions`,
+        `${base}${wire.path}`,
         auth,
-        {
-          model: model.model,
-          messages: [],
-          typesafe: { questions: typesafeQuestions, state },
-        },
+        wire.request(model.model, questions, state),
         signal,
       );
-      const content = (body.choices as { message?: { content?: string } }[] | undefined)?.[0]?.message?.content;
-      if (typeof content !== "string") throw new Error(`classifier returned no message content: ${sample(body)}`);
-      const parsed = parseJson(content) as { answers?: Record<string, unknown> } & Record<string, unknown>;
-      const answers = (parsed.answers ?? parsed) as Record<string, unknown>;
-      return answerEach((k) => normalize(choiceProbabilities(answers[k]), questions[k]!.options, content));
+      const answers = wire.answers(body);
+      return Object.fromEntries(
+        keys.map((k) => {
+          try {
+            const answer = answers(k);
+            if ((answer as { type?: string } | undefined)?.type === "refusal")
+              throw new Error(`decision provider refused: ${sample(answer)}`);
+            return [k, normalize(choiceProbabilities(answer), questions[k]!.options, body)];
+          } catch (error) {
+            return [k, error instanceof Error ? error : new Error(String(error))];
+          }
+        }),
+      );
     },
   };
 }
