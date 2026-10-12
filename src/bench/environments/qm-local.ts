@@ -1,11 +1,9 @@
-import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, type Config } from "../../config.ts";
 import { buildApp } from "../../wiring.ts";
 import { scopeId, type TurnRequest, type WorkspaceLayer } from "../../types.ts";
-import { localContainerName, localNetworkName, localVolumeName } from "../../sandbox/local-sandbox.ts";
 import type { SandboxHandle } from "../../sandbox/sandbox.ts";
 import type { BenchCase } from "../dataset.ts";
 import { type Outputs } from "../core/types.ts";
@@ -51,18 +49,7 @@ function dm(actorId: string, text: string): TurnRequest {
   };
 }
 
-/** Force-removes a case's container, volume and network; leaked networks exhaust Docker's address pool. */
-function removeDockerResources(actorId: string): void {
-  for (const suffix of ["", "-partners"]) {
-    const scope = scopeId("personal", `${actorId}${suffix}`);
-    const container = localContainerName(scope);
-    spawnSync("docker", ["rm", "-f", container], { stdio: "ignore" });
-    spawnSync("docker", ["volume", "rm", localVolumeName(scope)], { stdio: "ignore" });
-    spawnSync("docker", ["network", "rm", localNetworkName(container)], { stdio: "ignore" });
-  }
-}
-
-/** Boots one qm core on the local sandbox; each case gets a fresh actor, scope, seeded files and cleanup. */
+/** Boots one qm core on the local sandbox; each case gets a fresh actor, scope, computer, seeded files and cleanup. */
 export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Environment> {
   const dataDir = mkdtempSync(join(tmpdir(), "qm-bench-"));
   const config: Config = {
@@ -133,23 +120,27 @@ export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Envir
     },
     async open(benchCase, runId) {
       const actorId = `qm-bench-${benchCase.id}-${runId}-${Date.now().toString(36)}`;
+      const scope = scopeId("personal", actorId);
       const sessionIds: string[] = [];
       const partnerScope = scopeId("personal", `${actorId}-partners`);
+      // The case's computer. A scope runs on the sandbox resource it routes to, so the
+      // case gets one of its own; retiring it removes the container, network and volume.
+      const computer = await built.sandboxResources.create(actorId, scope, "local", benchCase.id);
+      await built.sandboxResources.setDefault(actorId, scope, computer.id);
+      const retire = async (): Promise<void> => {
+        await built.sandboxResources.setDefault(actorId, scope, null);
+        await built.sandboxResources.retire(actorId, computer.id);
+      };
       try {
         await built.workspace.ensureScope(partnerScope);
         for (const [path, body] of Object.entries(benchCase.privateFiles))
           await built.workspace.write(partnerScope, assertCasePath(path), body);
         const seedHandle = await built.sandbox.provision(layersFor(actorId));
-        try {
-          for (const [path, body] of Object.entries(benchCase.files))
-            await built.sandbox.writeFile(seedHandle, assertCasePath(path), body);
-          await built.sandbox.teardown(seedHandle);
-        } catch (error) {
-          await built.sandbox.teardown(seedHandle, { destroy: true });
-          throw error;
-        }
+        for (const [path, body] of Object.entries(benchCase.files))
+          await built.sandbox.writeFile(seedHandle, assertCasePath(path), body);
+        await built.sandbox.teardown(seedHandle);
       } catch (error) {
-        removeDockerResources(actorId);
+        await retire();
         throw error;
       }
       let graderHandle: SandboxHandle | null = null;
@@ -169,9 +160,9 @@ export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Envir
         },
         async close() {
           try {
-            if (graderHandle) await built.sandbox.teardown(graderHandle, { destroy: true });
+            if (graderHandle) await built.sandbox.teardown(graderHandle);
           } finally {
-            removeDockerResources(actorId);
+            await retire();
           }
         },
       };
