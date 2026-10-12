@@ -262,8 +262,8 @@ export function createTurnSandboxes(ctx: TurnSandboxContext) {
   };
   const skillsRoot = () => `${SKILLS_ROOT}/${turnSessionDir.split("/").at(-1)}`;
   const laidTrees = new Set<string>();
-  const materializeSkillTree = async (handle: SandboxHandle, r: SkillResolution, sandboxId?: string): Promise<void> => {
-    const treeKey = `${sandboxId ?? "default"}:${skillDir(skillsRoot(), r)}`;
+  const materializeSkillTree = async (handle: SandboxHandle, r: SkillResolution): Promise<void> => {
+    const treeKey = `${handle.resourceId ?? handle.id}:${skillDir(skillsRoot(), r)}`;
     if (laidTrees.has(treeKey)) return;
     const start = Date.now();
     try {
@@ -315,7 +315,7 @@ export function createTurnSandboxes(ctx: TurnSandboxContext) {
     const access = sandboxId !== undefined ? await accessResource(sandboxId) : undefined;
     if (access?.crossScope) return { content: render(skillsRoot()), sourceScopeId: resolution.skill.scopeId };
     const handle = access ? await provisionResource(access) : await provision();
-    await materializeSkillTree(handle, resolution, sandboxId);
+    await materializeSkillTree(handle, resolution);
     const root = `${handle.rootDir}/${skillsRoot()}`;
     const pack = packRoot(root, resolution);
     return {

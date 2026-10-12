@@ -140,7 +140,7 @@ test("a body read avoids sandbox work and a file request materializes that skill
       skills: { recordUse: async () => {} },
       sandboxResources: {
         access: async (_actor: string, id: string) => {
-          if (id !== "resource-1") throw new SandboxAccessError("sandbox not found");
+          if (id !== "resource-1" && id !== "box") throw new SandboxAccessError("sandbox not found");
           return { id, ownerScopeId: "personal:U1" };
         },
       },
@@ -148,7 +148,7 @@ test("a body read avoids sandbox work and a file request materializes that skill
         provision: async (_layers: unknown, options?: { sandboxId?: string }) => {
           sandboxIds.push(options?.sandboxId);
           provisions++;
-          return handle;
+          return { ...handle, id: options?.sandboxId ?? handle.id };
         },
         listDir: async () => [],
         removeDir: async () => {},
@@ -195,6 +195,8 @@ test("a body read avoids sandbox work and a file request materializes that skill
   files.set(".agent-skills/s/source-helper/references/example.txt", "local edit");
   await turn.useSkill("source-helper", "SKILL.md");
   assert.equal(files.get(".agent-skills/s/source-helper/references/example.txt"), "local edit");
+  await turn.useSkill("source-helper", "SKILL.md", "box");
+  assert.equal(files.get(".agent-skills/s/source-helper/references/example.txt"), "local edit");
   resolution.skill!.pack = { packId: "pack", commit: "c", upstreamName: "source-helper" };
   resolution.screenedBundles = [
     { packId: "pack", commit: "c", hash: "pack-hash", files: [{ path: "lib.txt", content: "PACK_RESOURCE" }] },
@@ -204,7 +206,7 @@ test("a body read avoids sandbox work and a file request materializes that skill
   assert.deepEqual(files, beforeResource);
   const onResource = await turn.useSkill("source-helper", "SKILL.md", "resource-1");
   assert.equal(onResource.packDir, "/workspace/.agent-skills/s/.packs/pack");
-  assert.deepEqual(sandboxIds, [undefined, "resource-1"]);
+  assert.deepEqual(sandboxIds, [undefined, "box", "resource-1"]);
   assert.equal(files.get(".agent-skills/s/.packs/pack/lib.txt"), "PACK_RESOURCE");
   assert.equal(
     [...files.keys()].some((path) => path.includes("/unrelated/")),
