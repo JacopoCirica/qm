@@ -28,7 +28,6 @@ const injection = (over: Partial<DecisionRule> = {}): DecisionRule => ({
   model: { provider: "gw", model: "example/decision-model" },
   mode: "enforce",
   onError: "no",
-  enabled: true,
   ...over,
 });
 
@@ -54,7 +53,7 @@ const fixed = (p: Record<string, number> | Error, calls: string[][] = []): Decis
 test("parseDecisionRule validates hooks, options, actions, onError, provider and model catalog", () => {
   assert.match(err(parse(injection())), /tool_response is not available yet/);
   assert.deepEqual(parse(route()), { rule: route() });
-  assert.deepEqual(parse({ ...route(), enabled: undefined }), { rule: route() });
+  assert.match(err(parse({ ...route(), mode: "sometimes" })), /mode must be one of off, observe, enforce/);
   assert.match(err(parse({ ...route(), hook: "nope" })), /hook/);
   assert.match(err(parse({ ...route(), onError: "maybe" })), /onError/);
   assert.match(
@@ -81,11 +80,11 @@ test("parseDecisionRule validates hooks, options, actions, onError, provider and
   );
 });
 
-test("checkRuleSet allows one enabled enforcing rule per most_confident hook", () => {
+test("checkRuleSet allows one active enforcing rule per most_confident hook", () => {
   const second = { ...route(), id: "router-2" };
   assert.match(String(checkRuleSet([route(), second])), /allows one enforcing rule/);
   assert.equal(checkRuleSet([route(), { ...second, mode: "observe" }]), undefined);
-  assert.equal(checkRuleSet([route(), { ...second, enabled: false }]), undefined);
+  assert.equal(checkRuleSet([route(), { ...second, mode: "off" }]), undefined);
 });
 
 test("runHook: highest-probability option decides; observe rules never act; errors fall back to onError", async () => {
@@ -362,11 +361,39 @@ test("the decisions resource validates against the model catalog and keeps agent
       "org:default-org",
     );
   assert.match(err(await apply({ rule: route() })), /m-deep is not in this deployment's model catalog/);
-  assert.match(err(await apply({ rule }, { actorId: "admin@x.com" })), /observe mode/);
+  assert.match(err(await apply({ rule }, { actorId: "admin@x.com" })), /off or observe/);
   assert.deepEqual(await apply({ rule: { ...rule, mode: "observe" } }, { actorId: "admin@x.com" }), { ok: true });
   assert.deepEqual(await apply({ rule }), { ok: true });
   assert.deepEqual(
     saved.map((r) => r.mode),
     ["observe", "enforce"],
+  );
+});
+
+test("decision hooks load active rules for the hook, decide, and audit every verdict", async () => {
+  const { createDecisionHooks } = await import("../src/decisions/hooks.ts");
+  const records: { action: string; resource?: string; status?: string }[] = [];
+  const audit = { record: (e: (typeof records)[number]) => void records.push(e) } as never;
+  const asked: string[] = [];
+  const store = {
+    rules: async (hook: string) => (
+      asked.push(hook),
+      [route(), { ...route(), id: "shadow", mode: "observe" as const }]
+    ),
+  } as never;
+  const decide = createDecisionHooks(store, fixed({ keep: 0.2, deep: 0.8 }), audit);
+  const verdict = await decide("turn_start", "refactor the scheduler", { scopeLabel: "personal:a", sessionId: "s1" });
+  assert.deepEqual(asked, ["turn_start"]);
+  assert.deepEqual(verdict?.runtime, { modelId: "m-deep" });
+  assert.deepEqual(
+    records.map((r) => [r.action, r.resource, r.status]),
+    [
+      ["decision.classify", "router", "use_runtime"],
+      ["decision.classify", "shadow", "use_runtime"],
+    ],
+  );
+  assert.equal(
+    await createDecisionHooks(undefined, fixed({}), audit)("turn_start", "x", { scopeLabel: "s", sessionId: "s" }),
+    undefined,
   );
 });

@@ -5607,6 +5607,24 @@
         display: grid;
         gap: 10px;
       }
+      #card-decisions .decision-provider-form,
+      #card-decisions .decision-rule-form,
+      #card-decisions .decision-option {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 8px 12px;
+        align-items: end;
+        margin: 10px 0;
+      }
+      #card-decisions .decision-option {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 10px;
+      }
+      #card-decisions textarea {
+        grid-column: 1 / -1;
+        min-height: 60px;
+      }
       #feature-flag-list .feature-flag-row {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;

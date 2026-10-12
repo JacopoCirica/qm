@@ -214,7 +214,7 @@ export const ADMIN_RESOURCES: readonly AdminResource[] = [
     kind: "custom",
     target: "org",
     label:
-      "Decision providers and rules. Send { provider }, { removeProvider: id }, { rule } or { removeRule: id }. A provider names a wire protocol (chat-completions, decisions or systemone); leave baseUrl unset to use the model gateway, or set baseUrl plus an org service credential. A rule asks a classifier a question at a hook and applies the chosen option's action. Rules saved by an agent must use observe mode; an admin enforces them from the dashboard.",
+      "Decision providers and rules. Send { provider }, { removeProvider: id }, { rule } or { removeRule: id }. A provider names a wire protocol (chat-completions, decisions or systemone); leave baseUrl unset to use the model gateway, or set baseUrl plus an org service credential. A rule asks a classifier a question at a hook and applies the chosen option's action. Rule mode is off, observe or enforce; rules saved by an agent must be off or observe, and an admin enforces them from the dashboard.",
     readKey: "decisions",
     get: async (deps) =>
       deps.decisions && {
@@ -247,12 +247,9 @@ export const ADMIN_RESOURCES: readonly AdminResource[] = [
           const parsed = parseDecisionRule(body.rule, await store.providers(), models);
           if ("error" in parsed) return parsed;
           if (ctx.capability && parsed.rule.mode === "enforce")
-            return { error: "agents save decision rules in observe mode; an admin enforces them from the dashboard" };
+            return { error: "agents save decision rules as off or observe; an admin enforces them from the dashboard" };
           await store.saveRule(parsed.rule, actor.id);
-          change = [
-            "decision.rule.save",
-            `${parsed.rule.id}:${parsed.rule.mode}:${parsed.rule.enabled ? "on" : "off"}`,
-          ];
+          change = ["decision.rule.save", `${parsed.rule.id}:${parsed.rule.mode}`];
         } else return { error: "send provider, removeProvider, rule or removeRule" };
       } catch (error) {
         return { error: errMessage(error) };

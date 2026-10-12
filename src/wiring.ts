@@ -1,6 +1,7 @@
 import { createPostgresTeamStore, type TeamStore } from "./teams/teams.ts";
 import { brokerCredentialAuthHeader } from "./api/credential-broker.ts";
-import { decideHook, type DecisionBackend, type DecisionHook } from "./decisions/decisions.ts";
+import type { DecisionBackend } from "./decisions/decisions.ts";
+import { createDecisionHooks } from "./decisions/hooks.ts";
 import { createDecisionBackend } from "./decisions/providers.ts";
 import { createPostgresDecisionStore, type DecisionStore } from "./decisions/store.ts";
 import type { SlackSessionStatusState } from "./slack/session-status.ts";
@@ -320,7 +321,7 @@ import { createClaudeHarness, claudeHarnessConfigOptions } from "./harness/claud
 import { createPiHarness, piHarnessConfigOptions, type ProviderKeys } from "./harness/pi-harness.ts";
 import { createHarnessRouter, resolveRuntimeChoiceDurable } from "./harness/harness-router.ts";
 import { selectableModelCatalog } from "./model/model-catalog.ts";
-import type { Harness, HarnessTurnInput } from "./harness/harness.ts";
+import type { Harness } from "./harness/harness.ts";
 import { createSecurityScreenProxy, type SecurityScreener } from "./security/security-screener.ts";
 import { createMemoryTaskStore } from "./tasks/memory-task-store.ts";
 import { createPostgresTaskStore } from "./tasks/postgres-task-store.ts";
@@ -1493,30 +1494,7 @@ export function buildApp(
         return rec ? { host: rec.host, enabled: rec.enabled, header: brokerCredentialAuthHeader(rec) } : null;
       },
     });
-  const DECISION_HOOK_TIMEOUT_MS = 5_000;
-  const decide = async (hook: DecisionHook, state: string, input: HarnessTurnInput) =>
-    decideHook(
-      (await decisions?.rules(hook).catch(reportFailureAs(`decision rules ${hook}`, []))) ?? [],
-      hook,
-      state,
-      decisionBackend,
-      () => AbortSignal.any([AbortSignal.timeout(DECISION_HOOK_TIMEOUT_MS), ...(input.cancel ? [input.cancel] : [])]),
-      (result) =>
-        auditLog.record({
-          at: Date.now(),
-          principalId: input.runtimeActorId ?? "system",
-          action: "decision.classify",
-          resource: result.ruleId,
-          scopeLabel: input.scopeLabel,
-          status: result.error ? "error" : result.action,
-          detail: JSON.stringify({
-            hook,
-            sessionId: input.session.id,
-            ...(input.runId ? { runId: input.runId } : {}),
-            ...result,
-          }),
-        }),
-    );
+  const decide = createDecisionHooks(decisions, decisionBackend, auditLog);
   const judgeModelId = (): string => config.judgeModelId ?? auxiliaryModelFor(orgBaseModelId() ?? fallback.modelId);
   const hydrateModelCatalog = async (): Promise<unknown> => {
     await refreshModels();
@@ -1541,7 +1519,15 @@ export function buildApp(
         input.runtimePurpose,
       );
     if (input.runtime?.modelId || input.continueTurn) return resolve(input.runtime);
-    const routed = (await decide("turn_start", input.input, input))?.runtime;
+    const routed = (
+      await decide("turn_start", input.input, {
+        ...(input.runtimeActorId ? { actorId: input.runtimeActorId } : {}),
+        scopeLabel: input.scopeLabel,
+        sessionId: input.session.id,
+        ...(input.runId ? { runId: input.runId } : {}),
+        ...(input.cancel ? { cancel: input.cancel } : {}),
+      })
+    )?.runtime;
     return resolve(routed ? { ...input.runtime, ...routed } : input.runtime);
   });
 

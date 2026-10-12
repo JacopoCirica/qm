@@ -25,11 +25,10 @@ const rule = (id: string, over: Partial<DecisionRule> = {}): DecisionRule => ({
   model: { provider: "gw", model: "example/decision-model" },
   mode: "enforce",
   onError: "keep",
-  enabled: true,
   ...over,
 });
 
-test("pg decisions: providers and rules are rows; hooks load enabled rules only", { skip }, async () => {
+test("pg decisions: providers and rules are rows; hooks load active rules only", { skip }, async () => {
   const store = createPostgresDecisionStore(URL!);
   await store.saveProvider({ id: "gw", protocol: "chat-completions" }, "a");
   await store.saveProvider({ id: "oa", protocol: "decisions", baseUrl: "https://dec.example", credential: "dec" }, "a");
@@ -40,7 +39,7 @@ test("pg decisions: providers and rules are rows; hooks load enabled rules only"
 
   await store.saveRule(rule("router"), "a");
   await store.saveRule(rule("shadow", { mode: "observe" }), "a");
-  await store.saveRule(rule("off", { enabled: false }), "a");
+  await store.saveRule(rule("off", { mode: "off" }), "a");
   assert.deepEqual(
     (await store.rules()).map((r) => r.id),
     ["off", "router", "shadow"],

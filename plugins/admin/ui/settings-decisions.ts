@@ -33,7 +33,6 @@ function blankRule() {
     provider: state.data.providers[0]?.id || "",
     model: "",
     mode: "observe",
-    enabled: true,
     onError: "a",
     options: [
       { key: "a", description: "", action: first, modelId: "", effortLevel: "", fastMode: false },
@@ -49,12 +48,12 @@ function editRule(r: any) {
     provider: r.model.provider,
     model: r.model.model,
     mode: r.mode,
-    enabled: r.enabled,
     onError: r.onError,
     options: Object.entries(r.options).map(([key, o]: [string, any]) => ({
       key,
       description: o.description,
       action: o.action,
+      message: o.message || "",
       modelId: o.runtime?.modelId || "",
       effortLevel: o.runtime?.effortLevel || "",
       fastMode: o.runtime?.fastMode || false,
@@ -69,7 +68,6 @@ function ruleBody(d: any) {
     question: d.question,
     model: { provider: d.provider, model: d.model },
     mode: d.mode,
-    enabled: d.enabled,
     onError: d.onError,
     options: Object.fromEntries(
       d.options.map((o: any) => [
@@ -77,6 +75,7 @@ function ruleBody(d: any) {
         {
           description: o.description,
           action: o.action,
+          ...(o.message ? { message: o.message } : {}),
           ...(o.action === "use_runtime"
             ? {
                 runtime: {
@@ -104,8 +103,8 @@ async function send(body: any, done: () => void) {
       done();
       state.message = "Saved.";
     }
-  } catch {
-    state.message = "Could not save. Try again.";
+  } catch (error) {
+    state.message = `Could not save: ${error instanceof Error ? error.message : String(error)}`;
   } finally {
     state.saving = false;
     redraw();
@@ -146,8 +145,8 @@ const field = (label: string, value: string, set: (v: string) => void, attrs = "
   /></label>`;
 const select = (label: string, value: string, values: readonly string[], set: (v: string) => void) =>
   html`<label
-    >${label}<select .value=${value} @change=${(e: Event) => (set((e.target as HTMLSelectElement).value), redraw())}>
-      ${values.map((v) => html`<option value=${v} ?selected=${v === value}>${v}</option>`)}
+    >${label}<select @change=${(e: Event) => (set((e.target as HTMLSelectElement).value), redraw())}>
+      ${values.map((v) => html`<option value=${v} .selected=${v === value}>${v}</option>`)}
     </select></label
   >`;
 function ruleForm() {
@@ -178,11 +177,15 @@ function ruleForm() {
       (v) => (d.provider = v),
     )}
     ${field("Decision model", d.model, (v) => (d.model = v), "model served by the provider")}
-    ${select("Mode", d.mode, ["observe", "enforce"], (v) => (d.mode = v))}
+    ${select("Mode", d.mode, ["off", "observe", "enforce"], (v) => (d.mode = v))}
     ${d.options.map(
       (o: any, i: number) =>
         html`<fieldset class="decision-option">
-          ${field("Option", o.key, (v) => (o.key = v))}
+          ${field("Option", o.key, (v) => {
+            if (d.onError === o.key) d.onError = v;
+            o.key = v;
+            redraw();
+          })}
           ${field("Description", o.description, (v) => (o.description = v))}
           ${select("Action", o.action, actions, (v) => (o.action = v))}
           ${
@@ -262,11 +265,8 @@ function template() {
               ${data.rules.map(
                 (r: any) =>
                   html`<div class="feature-flag-row">
-                    <code>${r.id}: ${r.hook} · ${r.mode}${r.enabled ? "" : " · off"}</code>
+                    <code>${r.id}: ${r.hook} · ${r.mode}</code>
                     <span>
-                      <button ?disabled=${state.saving} @click=${() => saveRule({ ...r, enabled: !r.enabled })}>
-                        ${r.enabled ? "Turn off" : "Turn on"}
-                      </button>
                       <button ?disabled=${state.saving} @click=${() => editRule(r)}>Edit</button>
                       <button class="danger" ?disabled=${state.saving} @click=${() => remove("Rule", r.id)}>
                         Remove

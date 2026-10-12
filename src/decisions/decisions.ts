@@ -18,6 +18,7 @@ interface RuntimeParams {
 }
 
 const DECISION_PROTOCOLS = ["chat-completions", "decisions", "systemone"] as const;
+const DECISION_MODES = ["off", "observe", "enforce"] as const;
 
 export interface DecisionProvider {
   id: string;
@@ -44,9 +45,8 @@ export interface DecisionRule {
   question: string;
   options: Record<string, DecisionOption>;
   model: DecisionModelRef;
-  mode: "observe" | "enforce";
+  mode: (typeof DECISION_MODES)[number];
   onError: string;
-  enabled: boolean;
 }
 
 export interface DecisionResult {
@@ -124,8 +124,8 @@ export function parseDecisionRule(
     return { error: `${r.id}: hook ${String(r.hook)} is not available yet; use ${LIVE_DECISION_HOOKS.join(", ")}` };
   if (typeof r.question !== "string" || !r.question.trim() || r.question.length > MAX_TEXT_CHARS)
     return { error: `${r.id}: question is required, at most ${MAX_TEXT_CHARS} characters` };
-  if (r.mode !== "observe" && r.mode !== "enforce") return { error: `${r.id}: mode must be observe or enforce` };
-  if (r.enabled !== undefined && typeof r.enabled !== "boolean") return { error: `${r.id}: enabled must be a boolean` };
+  if (!DECISION_MODES.includes(r.mode as DecisionRule["mode"]))
+    return { error: `${r.id}: mode must be one of ${DECISION_MODES.join(", ")}` };
   if (typeof r.options !== "object" || r.options === null || Array.isArray(r.options))
     return { error: `${r.id}: options must be an object` };
   const options: Record<string, DecisionOption> = {};
@@ -184,16 +184,15 @@ export function parseDecisionRule(
       question: r.question,
       options,
       model: { provider: m.provider, model: m.model },
-      mode: r.mode,
+      mode: r.mode as DecisionRule["mode"],
       onError: r.onError,
-      enabled: r.enabled !== false,
     },
   };
 }
 
 export function checkRuleSet(all: readonly DecisionRule[]): string | undefined {
-  const rules = all.filter((r) => r.enabled);
-  if (rules.length > MAX_RULES) return `at most ${MAX_RULES} enabled decision rules`;
+  const rules = all.filter((r) => r.mode !== "off");
+  if (rules.length > MAX_RULES) return `at most ${MAX_RULES} active decision rules`;
   const confidentHook = rules.find(
     (r, i) =>
       r.mode === "enforce" &&
@@ -207,7 +206,7 @@ export function checkRuleSet(all: readonly DecisionRule[]): string | undefined {
     0,
   );
   if (text > MAX_RULE_TEXT_CHARS)
-    return `enabled decision rules total ${text} characters of questions and options; at most ${MAX_RULE_TEXT_CHARS}`;
+    return `active decision rules total ${text} characters of questions and options; at most ${MAX_RULE_TEXT_CHARS}`;
   return undefined;
 }
 
@@ -322,19 +321,4 @@ export async function runHook(
     if (!decisive || weight(result) > weight(decisive)) decisive = result;
   }
   return { ...(decisive ? { decisive } : {}), results };
-}
-
-export async function decideHook(
-  rules: readonly DecisionRule[],
-  hook: DecisionHook,
-  state: string,
-  backend: DecisionBackend,
-  signal: () => AbortSignal,
-  record: (result: DecisionResult) => void,
-) {
-  const matching = rules.filter((r) => r.hook === hook && r.enabled);
-  if (!matching.length) return undefined;
-  const { decisive, results } = await runHook(matching, hook, state, backend, signal());
-  for (const result of results) record(result);
-  return decisive;
 }
