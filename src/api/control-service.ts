@@ -202,6 +202,21 @@ export async function canAdministerCron(
   return app.managesScope(actorId, cron.ownerScopeId);
 }
 
+export async function editWebhookTask(
+  app: App,
+  id: string,
+  action: string,
+  principalId: string,
+): Promise<ControlOk<{ webhook: Webhook }> | ControlErr<"not_found" | "forbidden" | "bad_request">> {
+  if (!action.trim()) return { ok: false, code: "bad_request", message: "task cannot be empty" };
+  const webhook = await app.getWebhook(id);
+  if (!webhook) return { ok: false, code: "not_found", message: `no webhook ${id}` };
+  if (!(await canAdministerWebhook(app, webhook, principalId)))
+    return { ok: false, code: "forbidden", message: "not your webhook" };
+  const updated = await app.updateWebhook(id, { action });
+  return updated ? { ok: true, webhook: updated } : { ok: false, code: "not_found", message: `no webhook ${id}` };
+}
+
 export async function canAdministerWebhook(
   app: Pick<App, "membershipControlsScope" | "managesScope" | "samePerson">,
   webhook: Pick<Webhook, "ownerScopeId" | "owner">,
@@ -896,14 +911,7 @@ export function createControlService(app: App, scheduler?: Scheduler, admin?: Ad
     async updateWebhook(id, patch, capability) {
       if (capability.triggered || !livePersonCapability(capability))
         return { ok: false, code: "forbidden", message: "editing a webhook requires a live turn started by its owner" };
-      if (!patch.action.trim()) return { ok: false, code: "bad_request", message: "task cannot be empty" };
-      const before = await app.getWebhook(id);
-      if (!before) return { ok: false, code: "not_found", message: `no webhook ${id}` };
-      if (!(await canAdministerWebhook(app, before, capability.actorId)))
-        return { ok: false, code: "forbidden", message: "not your webhook" };
-      const webhook = await app.updateWebhook(id, { action: patch.action });
-      if (!webhook) return { ok: false, code: "not_found", message: `no webhook ${id}` };
-      return { ok: true, webhook };
+      return editWebhookTask(app, id, patch.action, capability.actorId);
     },
 
     readSoul(capability) {

@@ -2,7 +2,7 @@ import type { Webhook } from "../../types.ts";
 import { WEBHOOK_SCHEMES } from "../../webhooks/verifiers.ts";
 import type { CreateWebhookInput } from "../../webhooks/webhook-store.ts";
 import { errMessage } from "../../util/errors.ts";
-import { canAdministerWebhook } from "../control-service.ts";
+import { canAdministerWebhook, editWebhookTask } from "../control-service.ts";
 import { PayloadTooLargeError, readRawBody, sendJson } from "../http.ts";
 import { isObj } from "./shared.ts";
 import type { ApiCtx, BaseCtx, Route } from "./route.ts";
@@ -81,6 +81,7 @@ async function incomingWebhook(ctx: BaseCtx): Promise<void> {
 const WEBHOOK_ERROR_STATUS: Record<string, number> = {
   bad_request: 400,
   forbidden: 403,
+  not_found: 404,
   unknown_destination: 400,
   webhook_create_failed: 400,
 };
@@ -174,24 +175,15 @@ async function setWebhookEnabled(ctx: ApiCtx, enabled: boolean): Promise<void> {
 
 async function updateWebhook(ctx: ApiCtx): Promise<void> {
   const { res, app, deps, params, capability, actor, url, body } = ctx;
-  const action = isObj(body) && typeof body.action === "string" ? body.action : undefined;
-  if (action === undefined || !action.trim())
-    return sendJson(res, 400, { error: "bad_request", message: "expected a non-empty { action }" });
-  if (!capability) {
-    const principalId = actor?.p ?? url.searchParams.get("principalId");
-    const webhook = await app.getWebhook(params.id!);
-    if (!principalId || !webhook || !(await canAdministerWebhook(app, webhook, principalId)))
-      return sendJson(res, 404, { error: "not_found" });
-    const updated = await app.updateWebhook(webhook.id, { action });
-    if (!updated) return sendJson(res, 404, { error: "not_found" });
-    return sendJson(res, 200, { webhook: redactWebhook(updated), url: inboundUrl(deps.publicUrl, updated.id) });
-  }
-  const r = await deps.control.updateWebhook(params.id!, { action }, capability);
-  if (!r.ok) return sendJson(res, WEBHOOK_UPDATE_STATUS[r.code] ?? 400, { error: r.code, message: r.message });
+  const action = isObj(body) && typeof body.action === "string" ? body.action : "";
+  const principalId = actor?.p ?? url.searchParams.get("principalId");
+  if (!capability && !principalId) return sendJson(res, 404, { error: "not_found" });
+  const r = capability
+    ? await deps.control.updateWebhook(params.id!, { action }, capability)
+    : await editWebhookTask(app, params.id!, action, principalId!);
+  if (!r.ok) return sendJson(res, WEBHOOK_ERROR_STATUS[r.code] ?? 400, { error: r.code, message: r.message });
   return sendJson(res, 200, { webhook: redactWebhook(r.webhook), url: inboundUrl(deps.publicUrl, r.webhook.id) });
 }
-
-const WEBHOOK_UPDATE_STATUS: Record<string, number> = { not_found: 404, forbidden: 403, bad_request: 400 };
 
 const disableWebhook = (ctx: ApiCtx): Promise<void> => setWebhookEnabled(ctx, false);
 const enableWebhook = (ctx: ApiCtx): Promise<void> => setWebhookEnabled(ctx, true);

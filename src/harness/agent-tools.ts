@@ -2904,10 +2904,10 @@ export function createAgentTools(ref: ToolContextRef, opts?: AgentToolsOptions):
         case "update": {
           const id = typeof params.id === "string" && params.id ? params.id : null;
           const task = typeof params.task === "string" ? params.task : "";
-          if (!id || !task.trim())
+          if (!id)
             return recordResult(
               callId,
-              { tool: "webhook", error: "id and task required" },
+              { tool: "webhook", error: "id required" },
               text("[error] webhook update requires `id` and the new `task`."),
               true,
             );

@@ -103,10 +103,8 @@ export function createWebhookStore(
     setEnabled(id, enabled) {
       return setTriggerEnabled(backing, id, enabled);
     },
-    async update(id, patch) {
-      if (!(await backing.get(id))) return null;
-      await backing.merge(id, { action: patch.action });
-      return backing.get(id);
+    update(id, patch) {
+      return backing.merge(id, { action: patch.action });
     },
     setRecipientConsent(id, recipientConsent) {
       return setTriggerRecipientConsent(backing, id, recipientConsent);
