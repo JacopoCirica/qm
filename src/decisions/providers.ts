@@ -33,6 +33,9 @@ function normalize(
   options: Record<string, string>,
   response: unknown,
 ): Record<string, number> {
+  const unknown = Object.keys(probabilities).filter((k) => !Object.hasOwn(options, k));
+  if (unknown.length)
+    throw new Error(`classifier returned unconfigured options ${unknown.join(", ")}: ${sample(response)}`);
   const out: Record<string, number> = {};
   let total = 0;
   for (const key of Object.keys(options)) {
@@ -70,15 +73,15 @@ async function postJson(
 
 function choiceProbabilities(answer: unknown): Record<string, unknown> {
   const a = (answer ?? {}) as { probabilities?: unknown };
-  if (Array.isArray(a.probabilities)) {
-    return Object.fromEntries(
-      (a.probabilities as ({ value?: unknown; probability?: unknown } | null)[]).map((p) => {
-        if (!p || typeof p !== "object") throw new Error(`malformed probability entry: ${sample(answer)}`);
-        return [String(p.value), p.probability];
-      }),
-    );
+  if (!Array.isArray(a.probabilities)) return (a.probabilities ?? {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const p of a.probabilities as ({ value?: unknown; probability?: unknown } | null)[]) {
+    if (!p || typeof p !== "object") throw new Error(`malformed probability entry: ${sample(answer)}`);
+    const key = String(p.value);
+    if (Object.hasOwn(out, key)) throw new Error(`duplicate probability for ${key}: ${sample(answer)}`);
+    out[key] = p.probability;
   }
-  return (a.probabilities ?? {}) as Record<string, unknown>;
+  return out;
 }
 
 type Questions = Record<string, DecisionQuestion>;

@@ -697,6 +697,7 @@ export function buildApp(
     autoFlaggerConfigs: artifactMap<PersistedAutoFlaggerConfig>("auto_flagger_configs"),
     decisionRules: artifactMap<PersistedDecisionRules>("decision_rules"),
     decisionProviders: artifactMap<PersistedDecisionProviders>("decision_providers"),
+    decisionLock: advisoryLock,
     turnWallClocks: artifactMap<PersistedTurnWallClock>("turn_wall_clock_configs"),
     deploymentIdentity: artifactMap<PersistedDeploymentIdentity>("deployment_identity"),
     defaultSecurityPosture: config.securityPosture,

@@ -1,4 +1,5 @@
 import type { DecisionProvider, DecisionRule } from "../decisions/decisions.ts";
+import type { AdvisoryLock } from "../persistence/advisory-lock.ts";
 import type { CommandPolicy, EgressPolicy, ScopeId } from "../types.ts";
 import { scopeId } from "../types.ts";
 import { defaultOrgPolicy } from "../policy/command-policy.ts";
@@ -318,6 +319,7 @@ export function createMemoryConfigStore(
     autoFlaggerConfigs?: DurableMap<PersistedAutoFlaggerConfig>;
     decisionRules?: DurableMap<PersistedDecisionRules>;
     decisionProviders?: DurableMap<PersistedDecisionProviders>;
+    decisionLock?: AdvisoryLock;
     turnWallClocks?: DurableMap<PersistedTurnWallClock>;
     deploymentIdentity?: DurableMap<PersistedDeploymentIdentity>;
     connectorSecretKey?: Buffer | string;
@@ -393,6 +395,8 @@ export function createMemoryConfigStore(
     pendingWrites.set(key, pending);
     void pending.catch(persistWarn(what));
   };
+  const lockDecisions = <T>(fn: () => Promise<T>) =>
+    opts.decisionLock ? opts.decisionLock.withLock(`decisions:${org}`, fn) : fn();
   const persistAwaited = (key: string, op: () => Promise<void>): Promise<void> => {
     const pending = writeQueue(key, op);
     const settled: Promise<void> = pending.then(
@@ -1152,25 +1156,29 @@ export function createMemoryConfigStore(
     },
     getDecisionProviders: () => decisionProviders,
     async setDecisionProviders(providers) {
-      await persistAwaited(`decisions:${org}`, async () => {
-        const stored = (await decisionRulesStore.get(org))?.rules ?? [];
-        const orphan = stored.find((r) => !providers.some((p) => p.id === r.model.provider));
-        if (orphan) throw new Error(`decision rule ${orphan.id} still uses provider ${orphan.model.provider}`);
-        await (providers.length
-          ? decisionProvidersStore.put(org, { scopeId: org, providers })
-          : decisionProvidersStore.delete(org));
-        decisionProviders = providers;
-      });
+      await persistAwaited(`decisions:${org}`, () =>
+        lockDecisions(async () => {
+          const stored = (await decisionRulesStore.get(org))?.rules ?? [];
+          const orphan = stored.find((r) => !providers.some((p) => p.id === r.model.provider));
+          if (orphan) throw new Error(`decision rule ${orphan.id} still uses provider ${orphan.model.provider}`);
+          await (providers.length
+            ? decisionProvidersStore.put(org, { scopeId: org, providers })
+            : decisionProvidersStore.delete(org));
+          decisionProviders = providers;
+        }),
+      );
     },
     getDecisionRules: () => decisionRules,
     async setDecisionRules(rules) {
-      await persistAwaited(`decisions:${org}`, async () => {
-        const known = (await decisionProvidersStore.get(org))?.providers ?? [];
-        const missing = rules.find((r) => !known.some((p) => p.id === r.model.provider));
-        if (missing) throw new Error(`decision rule ${missing.id} uses unknown provider ${missing.model.provider}`);
-        await (rules.length ? decisionRulesStore.put(org, { scopeId: org, rules }) : decisionRulesStore.delete(org));
-        decisionRules = rules;
-      });
+      await persistAwaited(`decisions:${org}`, () =>
+        lockDecisions(async () => {
+          const known = (await decisionProvidersStore.get(org))?.providers ?? [];
+          const missing = rules.find((r) => !known.some((p) => p.id === r.model.provider));
+          if (missing) throw new Error(`decision rule ${missing.id} uses unknown provider ${missing.model.provider}`);
+          await (rules.length ? decisionRulesStore.put(org, { scopeId: org, rules }) : decisionRulesStore.delete(org));
+          decisionRules = rules;
+        }),
+      );
     },
     getTurnWallClockSecDurable: async (id) => (await turnWallClockStore.get(id))?.sec ?? null,
     async setTurnWallClockSec(id, sec) {
