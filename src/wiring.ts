@@ -370,7 +370,7 @@ import { createApp, type App } from "./api/app.ts";
 import { startSession } from "./api/start-session.ts";
 import { createSwarmStore, type SwarmStorage } from "./swarms/swarm-store.ts";
 import { createSwarmService } from "./swarms/swarm-service.ts";
-import { createSlackCoreClient, type SlackAgentRequestContext, type SlackCoreClient } from "./api/slack-core-client.ts";
+import { createSlackCoreClient, type SlackCoreClient } from "./api/slack-core-client.ts";
 import { createSurfaceContextPuller } from "./api/surface-context-puller.ts";
 import { createEngagedRegistry } from "./wake/engaged-registry.ts";
 import { createWakeSweep, type WakeSweep } from "./wake/sweep.ts";
@@ -2304,7 +2304,6 @@ export function buildApp(
     runs,
     turnStream,
     tasks,
-    agentRequests: artifactMap<SlackAgentRequestContext>("slack_agent_requests"),
     ackPicks: ackEmojiPicks,
     ackModelId: () => auxiliaryModelForProvider("anthropic"),
     ...(config.brandingDefault ? { brandingDefault: config.brandingDefault } : {}),
@@ -3050,6 +3049,7 @@ export function serverDeps(
     credentialUsage: built.credentialUsage,
     featureFlags: built.featureFlags,
     ...(built.decisions ? { decisions: built.decisions } : {}),
+    ...(built.teams ? { teams: built.teams } : {}),
     egressAudit: built.egressAudit,
     sessions: built.sessions,
     auditLog: built.auditLog,
