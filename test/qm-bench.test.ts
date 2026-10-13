@@ -131,3 +131,16 @@ test("network-find-peers: the gold answer names people as the directory spells t
     }
   }
 });
+
+test("knowledge-refresh-stale: a stale value on a later line of its section is still seen", async () => {
+  const task = tasks.find((t) => t.id === "knowledge-refresh-stale")!;
+  const fixture = task.generate(1);
+  const key = fixture.key as { changed: Record<string, { from: string; to: string }> };
+  const [title, change] = Object.entries(key.changed)[0]!;
+  const gold = goldOutputs(task, fixture)["output/handbook.md"]!;
+  const heading = `## ${title}\n`;
+  const firstLineEnd = gold.indexOf("\n", gold.indexOf(heading) + heading.length);
+  const stale = `${gold.slice(0, firstLineEnd + 1)}Still true: ${change.from}\n${gold.slice(firstLineEnd + 1)}`;
+  const result = await grade(task, memoryOutputs({ "output/handbook.md": stale }), fixture.key);
+  assert.ok(result.checks.find((c) => c.id === "effective-changes-applied")!.score < 1);
+});

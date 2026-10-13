@@ -5,7 +5,11 @@ import type { RefreshKey } from "./generate.ts";
 export async function verify(outputs: Outputs, key: RefreshKey): Promise<Check[]> {
   const text = (await outputs.read("output/handbook.md")) ?? "";
   const sections = new Map<string, string>();
-  for (const m of text.matchAll(/^## (.+)\n([\s\S]*?)(?=\n## |\s*$)/gm)) sections.set(m[1]!.trim(), m[2]!.trim());
+  for (const part of text.split(/^(?=## )/m)) {
+    if (!part.startsWith("## ")) continue;
+    const [heading, ...body] = part.split("\n");
+    sections.set(heading!.slice(3).trim(), body.join("\n").trim());
+  }
   const changedTitles = Object.keys(key.changed);
   const updated = changedTitles.filter((t) => {
     const body = sections.get(t) ?? "";
