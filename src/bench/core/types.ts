@@ -105,14 +105,15 @@ export async function grade(verifier: Verifier, outputs: Outputs, key: unknown):
     const detail = leaked ? "restricted content in output" : `missing ${missing[0]}`;
     return { reward: 0, partial: 0, leaked, checks: checks.map((c) => ({ ...c, score: 0, detail })) };
   }
-  const partial = checks.reduce((sum, c) => sum + clamp01(c.score), 0) / checks.length;
-  const reward = checks.every((c) => clamp01(c.score) >= 1) ? 1 : 0;
+  const partial = checks.reduce((sum, c) => sum + clamp01(c), 0) / checks.length;
+  const reward = checks.every((c) => clamp01(c) >= 1) ? 1 : 0;
   return { reward, partial: round4(partial), checks, leaked };
 }
 
-/** Clamps a check score to [0, 1]; a non-finite score counts as 0. */
-function clamp01(n: number): number {
-  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0;
+/** Clamps a check's score to [0, 1]; a non-finite score is a verifier bug, not an agent failure. */
+function clamp01(check: Check): number {
+  if (!Number.isFinite(check.score)) throw new Error(`check ${check.id} scored ${check.score}`);
+  return Math.min(1, Math.max(0, check.score));
 }
 
 /** Rounds partial credit to four decimals so summaries are stable across runs. */
