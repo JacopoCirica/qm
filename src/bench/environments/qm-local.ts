@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { loadConfig, type Config } from "../../config.ts";
 import { buildApp } from "../../wiring.ts";
 import { scopeId, type TurnRequest, type WorkspaceLayer } from "../../types.ts";
+import { errMessage, withCleanup } from "../../util/errors.ts";
 import type { SandboxHandle } from "../../sandbox/sandbox.ts";
 import type { BenchCase } from "../dataset.ts";
 import { type Outputs } from "../core/types.ts";
@@ -101,13 +102,7 @@ export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Envir
   };
   const outputsFor = (handle: SandboxHandle): Outputs => ({
     read: (path) => built.sandbox.readFile(handle, deliverablePath(path)),
-    list: async () => {
-      const result = await built.sandbox.run(handle, "find output -type f 2>/dev/null");
-      return result.stdout
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean);
-    },
+    list: () => built.sandbox.listDir(handle, "output"),
   });
 
   return {
@@ -140,7 +135,9 @@ export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Envir
           await built.sandbox.writeFile(seedHandle, assertCasePath(path), body);
         await built.sandbox.teardown(seedHandle);
       } catch (error) {
-        await retire();
+        await retire().catch((cleanupError: unknown) => {
+          throw new AggregateError([error, cleanupError], errMessage(error), { cause: error });
+        });
         throw error;
       }
       let graderHandle: SandboxHandle | null = null;
@@ -158,13 +155,10 @@ export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Envir
           const sessionId = sessionIds[0];
           return sessionId ? built.sessions.getEntries(sessionId) : [];
         },
-        async close() {
-          try {
+        close: () =>
+          withCleanup(async () => {
             if (graderHandle) await built.sandbox.teardown(graderHandle);
-          } finally {
-            await retire();
-          }
-        },
+          }, retire),
       };
     },
   };
