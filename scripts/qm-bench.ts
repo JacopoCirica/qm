@@ -1,7 +1,9 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Config } from "../src/config.ts";
-import { errMessage } from "../src/util/errors.ts";
+import { harnessEnvStrict } from "../src/config.ts";
+import { ProviderTurnError } from "../src/core/turn-error.ts";
+import { sleep } from "../src/util/async.ts";
+import { errMessage, withCleanup } from "../src/util/errors.ts";
 import { buildCases, loadCases, parseVariants, type BenchCase } from "../src/bench/dataset.ts";
 import { qmLocalEnvironment, type Environment } from "../src/bench/environments/qm-local.ts";
 import { grade, memoryOutputs, type BenchTask } from "../src/bench/core/types.ts";
@@ -34,12 +36,7 @@ for (const [name, value] of [
     process.exit(1);
   }
 }
-const harness = process.env.QM_BENCH_HARNESS ?? "pi";
-if (!["mock", "pi", "opencode", "codex", "claude"].includes(harness)) {
-  console.error(`QM_BENCH_HARNESS must be one of mock, pi, opencode, codex, claude; got ${harness}`);
-  process.exit(1);
-}
-const benchHarness = harness as Config["harness"];
+const benchHarness = harnessEnvStrict(process.env.QM_BENCH_HARNESS ?? "pi");
 const datasetDir = process.env.QM_BENCH_DATASET;
 const taskFilter = (process.env.QM_BENCH_TASKS ?? "")
   .split(",")
@@ -122,43 +119,51 @@ async function runCase(env: Environment, benchCase: BenchCase): Promise<CaseReco
   const messages: CaseRecord["messages"] = [];
   const statuses: string[] = [];
   const session = await env.open(benchCase, runId);
-  try {
-    for (const text of [benchCase.prompt, ...(benchCase.followUp ? [benchCase.followUp] : [])]) {
-      messages.push({ role: "user", content: text });
-      const result = await session.turn(text);
-      statuses.push(result.status);
-      messages.push({ role: "assistant", content: result.reply });
-      if (result.status === "failed" || result.status === "error")
-        throw new Error(`turn ${result.status}: ${result.reply}`);
-      if (result.status !== "ok") break;
-    }
-    const reader = await session.outputs();
-    const outputs: Record<string, string> = {};
-    for (const path of await reader.list()) outputs[path] = (await reader.read(path)) ?? "";
-    const graded = await grade(verifierFor(benchCase.task), reader, benchCase.key);
-    return {
-      task: benchCase.task,
-      family: benchCase.family,
-      difficulty: benchCase.difficulty,
-      case: benchCase.id,
-      variant: benchCase.variant,
-      model: benchModel,
-      startedAt,
-      finishedAt: new Date().toISOString(),
-      turns: statuses.length,
-      statuses,
-      reward: graded.reward,
-      partial: graded.partial,
-      leaked: graded.leaked,
-      checks: graded.checks.map((c) => ({ ...c, passed: c.score >= 1 })),
-      outputs,
-      messages,
-      entries: await session.entries(),
-      error: null,
-    };
-  } finally {
-    await session.close();
-  }
+  return withCleanup(
+    async () => {
+      for (const text of [benchCase.prompt, ...(benchCase.followUp ? [benchCase.followUp] : [])]) {
+        messages.push({ role: "user", content: text });
+        const result = await session.turn(text);
+        statuses.push(result.status);
+        messages.push({ role: "assistant", content: result.reply });
+        if (result.status === "failed" || result.status === "error")
+          throw new Error(`turn ${result.status}: ${result.reply}`);
+        if (result.status !== "ok") break;
+      }
+      const reader = await session.outputs();
+      const outputs: Record<string, string> = {};
+      for (const path of await reader.list()) outputs[path] = (await reader.read(path)) ?? "";
+      const graded = await grade(verifierFor(benchCase.task), reader, benchCase.key);
+      return {
+        task: benchCase.task,
+        family: benchCase.family,
+        difficulty: benchCase.difficulty,
+        case: benchCase.id,
+        variant: benchCase.variant,
+        model: benchModel,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        turns: statuses.length,
+        statuses,
+        reward: graded.reward,
+        partial: graded.partial,
+        leaked: graded.leaked,
+        checks: graded.checks.map((c) => ({ ...c, passed: c.score >= 1 })),
+        outputs,
+        messages,
+        entries: await session.entries(),
+        error: null,
+      };
+    },
+    () => session.close(),
+  );
+}
+
+/** A provider rate limit thrown by the turn, at any depth of the cause chain. */
+function isRateLimited(e: unknown): boolean {
+  for (let error: unknown = e; error instanceof Error; error = error.cause)
+    if (error instanceof ProviderTurnError && error.code === "rate_limit") return true;
+  return false;
 }
 
 /** Retries a case a few times when the provider rate-limits it. */
@@ -167,10 +172,10 @@ async function runCaseWithBackoff(env: Environment, benchCase: BenchCase): Promi
     try {
       return await runCase(env, benchCase);
     } catch (e) {
-      if (!/\b429\b|rate.?limit/i.test(errMessage(e)) || retry >= RATE_LIMIT_RETRIES) throw e;
+      if (!isRateLimited(e) || retry >= RATE_LIMIT_RETRIES) throw e;
     }
     console.log(`  ${benchCase.id}: rate limited, pausing ${RATE_LIMIT_PAUSE_MS / 1000}s before retry ${retry + 1}`);
-    await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_PAUSE_MS));
+    await sleep(RATE_LIMIT_PAUSE_MS);
   }
 }
 
@@ -196,7 +201,7 @@ const env = await qmLocalEnvironment({
 });
 mkdirSync(outDir, { recursive: true });
 console.log(
-  `qm-bench ${runId}: ${cases.length} cases from ${datasetDir ?? "generators"}, harness ${harness}, model ${modelId}${providerBaseUrl ? ` via ${providerBaseUrl}` : ""}`,
+  `qm-bench ${runId}: ${cases.length} cases from ${datasetDir ?? "generators"}, harness ${benchHarness}, model ${modelId}${providerBaseUrl ? ` via ${providerBaseUrl}` : ""}`,
 );
 const records: CaseRecord[] = [];
 try {
