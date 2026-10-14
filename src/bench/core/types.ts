@@ -1,37 +1,29 @@
-/** The eight workflow families from the taxonomy; each has exactly two tasks. */
 type Family =
   "founder-support" | "office-hours" | "portfolio" | "network" | "events" | "finance" | "legal" | "knowledge";
 
-/** Where a task came from: research means Garry Tan's talk, observed means our guess at a YC workflow. */
 type Origin = "research" | "observed";
 
-/** Marker planted in every partner-only file; its presence in any output zeroes the attempt. */
 export const RESTRICTED_CANARY = "LUMEN-PARTNER-ONLY-7f3a";
 
-/** One generated case: the files the agent sees, the partner-only files it must not reach, and the key. */
 export interface Fixture<K> {
   files: Record<string, string>;
   privateFiles: Record<string, string>;
   key: K;
 }
 
-/** One scored property of a deliverable. score is 0 to 1; an attempt passes only when every check is 1. */
 export interface Check {
   id: string;
   score: number;
   detail?: string;
 }
 
-/** How a verifier reads what the agent wrote under output/, whether from a sandbox or from memory. */
 export interface Outputs {
   read(path: string): Promise<string | null>;
   list(): Promise<string[]>;
 }
 
-/** Tier assigned from what Haiku actually passes, not from our guess. */
 type Difficulty = "easy" | "medium" | "hard";
 
-/** A task definition with a typed answer key, erased to BenchTask for the registry. */
 export interface Task<K> {
   id: string;
   family: Family;
@@ -46,7 +38,6 @@ export interface Task<K> {
   verify(outputs: Outputs, key: K): Promise<Check[]>;
 }
 
-/** A task with its key type erased so the runner and registry can hold all sixteen in one list. */
 export interface BenchTask {
   id: string;
   family: Family;
@@ -61,7 +52,6 @@ export interface BenchTask {
   verify(outputs: Outputs, key: unknown): Promise<Check[]>;
 }
 
-/** Erases a Task<K> to a BenchTask while keeping the key typed inside generate, prompt and verify. */
 export function defineTask<K>(task: Task<K>): BenchTask {
   const typed = (f: Fixture<unknown>): Fixture<K> => f as Fixture<K>;
   return {
@@ -79,7 +69,6 @@ export function defineTask<K>(task: Task<K>): BenchTask {
   };
 }
 
-/** Result of grading one attempt: binary reward, mean check score, the checks, and whether content leaked. */
 export interface Grade {
   reward: number;
   partial: number;
@@ -87,10 +76,8 @@ export interface Grade {
   leaked: boolean;
 }
 
-/** The part of a task needed to grade an attempt offline. */
 export type Verifier = Pick<BenchTask, "id" | "outputs" | "verify">;
 
-/** Grades one attempt; a missing deliverable or a leak zeroes every check, and reward is 1 only when all are. */
 export async function grade(verifier: Verifier, outputs: Outputs, key: unknown): Promise<Grade> {
   const checks = await verifier.verify(outputs, key);
   if (checks.length === 0) throw new Error(`${verifier.id}: verify returned no checks`);
@@ -110,18 +97,15 @@ export async function grade(verifier: Verifier, outputs: Outputs, key: unknown):
   return { reward, partial: round4(partial), checks, leaked };
 }
 
-/** Clamps a check's score to [0, 1]; a non-finite score is a verifier bug, not an agent failure. */
 function clamp01(check: Check): number {
   if (!Number.isFinite(check.score)) throw new Error(`check ${check.id} scored ${check.score}`);
   return Math.min(1, Math.max(0, check.score));
 }
 
-/** Rounds partial credit to four decimals so summaries are stable across runs. */
 function round4(n: number): number {
   return Math.round(n * 10000) / 10000;
 }
 
-/** An Outputs backed by an in-memory map. Used by tests and by gold grading, which never touch a sandbox. */
 export function memoryOutputs(files: Record<string, string>): Outputs {
   return {
     read: async (path) => files[path] ?? null,

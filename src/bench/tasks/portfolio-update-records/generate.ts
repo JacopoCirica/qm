@@ -4,9 +4,6 @@ import { type Fixture } from "../../core/types.ts";
 import { COMPANY_WORDS, SECTORS, addDays, personName, randomPath } from "../../core/world.ts";
 import { companyNames, slugify } from "../../families/portfolio.ts";
 
-/**
- * One row of portfolio/companies.csv.
- */
 export interface CompanyRow {
   slug: string;
   name: string;
@@ -16,20 +13,13 @@ export interface CompanyRow {
   last_update: string;
 }
 
-/**
- * Answer key: the column order and the rows after every valid update is applied.
- */
 export interface UpdateKey {
   header: string[];
   expected: CompanyRow[];
 }
 
-/**
- * Column order the output must keep.
- */
 const HEADER = ["slug", "name", "sector", "mrr_usd", "headcount", "last_update"];
 
-/** How the founder states MRR, with the dollar value that statement carries; EUR converts at the fx rate. */
 function mrrPhrase(
   r: Rng,
   newMrr: number | undefined,
@@ -45,7 +35,6 @@ function mrrPhrase(
   return { text: `MRR ${stated.text}`, value: stated.value };
 }
 
-/** A thread date two or more days from the company's others, so the newer thread is clear. */
 function freshDate(r: Rng, used: Set<string>): string {
   for (;;) {
     const date = addDays("2026-09-01", r.int(0, 25));
@@ -56,7 +45,6 @@ function freshDate(r: Rng, used: Set<string>): string {
   }
 }
 
-/** Builds 200 companies and 120 update threads with corrections, EUR and outside senders. */
 export function generate(seed: number): Fixture<UpdateKey> {
   const r = rng(seed * 7727 + 1);
   const names = companyNames(r, 200);

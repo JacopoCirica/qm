@@ -4,7 +4,6 @@ import { type Assignment, assignmentCsv } from "../../families/events.ts";
 import { type ChangesKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
-/** Re-plan yesterday's seats after overnight changes, moving only who must, then apply a second round. */
 export function task(): BenchTask {
   return defineTask<ChangesKey>({
     id: "events-handle-scheduling-changes",
@@ -25,7 +24,6 @@ export function task(): BenchTask {
   });
 }
 
-/** Reference answer: keep every still-valid seat, then place movers and arrivals with stayers locked. */
 export function gold(f: Fixture<ChangesKey>): Record<string, string> {
   const mustMove = new Set(f.key.mustMove);
   const kept: Assignment = new Map(

@@ -3,9 +3,6 @@ import { csv, emailThread, list } from "../../core/text.ts";
 import type { Fixture } from "../../core/types.ts";
 import { COMPANY_WORDS, addDays, personName, randomPath } from "../../core/world.ts";
 
-/**
- * One meeting on the final schedule, with the attending founder and current tracking id.
- */
 export interface Slot {
   time: string;
   room: string;
@@ -14,70 +11,46 @@ export interface Slot {
   tracker: string;
 }
 
-/**
- * Answer key: the final ordered schedule and the companies that must not appear.
- */
 export interface BriefKey {
   date: string;
   finalSlots: Slot[];
   removed: string[];
 }
 
-/**
- * Filler blockers for update emails.
- */
 const BLOCKERS = list(`
   security review before renewal, founding designer search, pilot stuck in procurement, GPU quota,
   payments partner compliance, cofounder disagreement on roadmap, churn in the mid-market segment,
   SOC 2 audit timeline
 `);
 
-/**
- * Half-hour meeting times. The first ten hold the published schedule; the last two are free for additions.
- */
 const TIMES = list(`
   09:00, 09:30, 10:00, 10:30, 11:00, 11:30, 13:00, 13:30, 14:00, 14:30, 15:00, 15:30
 `);
-/**
- * Four rooms per time slot.
- */
+
 const ROOMS = ["Room A", "Room B", "Room C", "Room D"];
 
-/**
- * A company with its founder and email domain, used to match update senders.
- */
 interface Company {
   name: string;
   founder: string;
   domain: string;
 }
 
-/**
- * What the newest email for a company says: its date, who attends, and the tracking id.
- */
 interface Latest {
   date: string;
   attendee: string;
   tracker: string;
 }
 
-/**
- * Random OH tracking id; every email in a thread carries a different one so quoted history is a trap.
- */
 function tracker(r: Rng): string {
   return `OH-${1000 + r.int(1, 8999)}`;
 }
 
-/**
- * Applies a room swap between two slots at the same time.
- */
 function swapRoom(slot: Slot, pair: [Slot, Slot]): Slot {
   if (slot.company === pair[0].company) return { ...slot, room: pair[1].room };
   if (slot.company === pair[1].company) return { ...slot, room: pair[0].room };
   return slot;
 }
 
-/** One three-message thread; only the last email's tracking id and attendee are current. */
 function thread(r: Rng, c: Company, latestDate: string): { text: string; latest: Latest } {
   const cofounder = personName(r);
   const swapFounder = r.chance(0.35);
@@ -106,7 +79,6 @@ function thread(r: Rng, c: Company, latestDate: string): { text: string; latest:
   return { text, latest: { date: latestDate, attendee: swapFounder ? cofounder : c.founder, tracker: current } };
 }
 
-/** Writes one or two randomly named threads per company and returns what the newest says. */
 function updates(r: Rng, companies: Company[], date: string, files: Record<string, string>): Map<string, Latest> {
   const latest = new Map<string, Latest>();
   for (const c of companies) {
@@ -121,7 +93,6 @@ function updates(r: Rng, companies: Company[], date: string, files: Record<strin
   return latest;
 }
 
-/** Builds 40 scheduled companies, an ops chat full of reversals, and the update threads. */
 export function generate(seed: number): Fixture<BriefKey> {
   const r = rng(seed * 31337 + 3);
   const date = addDays("2026-09-08", r.int(0, 60));

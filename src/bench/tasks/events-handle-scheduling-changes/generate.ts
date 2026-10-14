@@ -14,7 +14,6 @@ import {
   worldFiles,
 } from "../../families/events.ts";
 
-/** Answer key: yesterday's seats, the world after all changes, withdrawals, cancellations, movers and the rate. */
 export interface ChangesKey {
   before: Record<string, string>;
   finalWorld: World;
@@ -26,7 +25,6 @@ export interface ChangesKey {
   baselineTop2: number;
 }
 
-/** Builds yesterday's seats and an overnight change list; movers follow the rule written into changes.md. */
 export function generate(seed: number): Fixture<ChangesKey> {
   const r = rng(seed * 4423 + 12);
   const world = buildWorld(r, r.int(5000, 7000));

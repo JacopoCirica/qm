@@ -1,7 +1,6 @@
 import type { Check, Outputs } from "../../core/types.ts";
 import type { RefreshKey } from "./generate.ts";
 
-/** Scores changes applied, untouched sections byte-identical, and section order preserved. */
 export async function verify(outputs: Outputs, key: RefreshKey): Promise<Check[]> {
   const text = (await outputs.read("output/handbook.md")) ?? "";
   const sections = new Map<string, string>();

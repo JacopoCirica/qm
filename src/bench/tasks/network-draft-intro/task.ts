@@ -2,7 +2,6 @@ import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type IntroKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
-/** Draft double opt-in intro emails under the intro policy, skipping blocked people. */
 export function task(): BenchTask {
   return defineTask<IntroKey>({
     id: "network-draft-intro",
@@ -20,7 +19,6 @@ export function task(): BenchTask {
   });
 }
 
-/** Reference answer: a skipped entry per blocked target, a short compliant email for the rest. */
 export function gold(f: Fixture<IntroKey>): Record<string, string> {
   const k = f.key;
   return {

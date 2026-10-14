@@ -7,9 +7,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-/** The bench's contract: taxonomy, determinism, gold passes, empty fails, leaks zero, dataset round trip. */
 const tasks = allTasks();
-/** Both cases of every task. */
+
 const seeds = [1, 2];
 
 test("taxonomy has two tasks in each of the eight families", () => {

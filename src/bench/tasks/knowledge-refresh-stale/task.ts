@@ -1,4 +1,3 @@
-/** Apply every already-effective announcement to the handbook, in stamp order across files, via aliases. */
 import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type RefreshKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
@@ -20,9 +19,6 @@ export function task(): BenchTask {
   });
 }
 
-/**
- * Reference answer: the original handbook with each keyed change substituted into its section body.
- */
 export function gold(f: Fixture<RefreshKey>): Record<string, string> {
   const body = f.key.original
     .map((s) => {

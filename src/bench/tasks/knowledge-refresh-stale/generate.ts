@@ -3,24 +3,17 @@ import type { Fixture } from "../../core/types.ts";
 import { addDays, personName } from "../../core/world.ts";
 import { list } from "../../core/text.ts";
 
-/**
- * One handbook section: its heading and one-line body holding the current value.
- */
 interface Section {
   title: string;
   body: string;
 }
 
-/** Answer key: original sections, the changes effective at the cut-off, and the sections to keep identical. */
 export interface RefreshKey {
   original: Section[];
   changed: Record<string, { from: string; to: string }>;
   untouchedTitles: string[];
 }
 
-/**
- * Base section titles; each also gets a (legacy) and a FAQ variant so near-duplicate headings exist.
- */
 const TITLE_WORDS = list(`
   Office, Expenses, Office hours, Holidays, Security, Travel, Equipment, Onboarding, Wifi,
   Insurance, Parental leave, Remote work, Meetings, Interviews, Payroll, Reimbursements, Visitors,
@@ -30,7 +23,6 @@ const TITLE_WORDS = list(`
   Guests, Badges, Desks, Lockers, Kitchen, Recycling, Phones, Email, Documents, Contracts, Vendors
 `);
 
-/** Splits announcements across two files at random; unique stamps make cross-file order the only order. */
 function splitByStamp(r: Rng, lines: string[]): [string[], string[]] {
   const ops: string[] = [];
   const people: string[] = [];
@@ -38,7 +30,6 @@ function splitByStamp(r: Rng, lines: string[]): [string[], string[]] {
   return [ops, people];
 }
 
-/** Builds a 150-section handbook, alias chains, and announcements that are future, reverted or effective. */
 export function generate(seed: number): Fixture<RefreshKey> {
   const r = rng(seed * 2731 + 37);
   const titles = [...TITLE_WORDS, ...TITLE_WORDS.map((t) => `${t} (legacy)`), ...TITLE_WORDS.map((t) => `${t} FAQ`)];

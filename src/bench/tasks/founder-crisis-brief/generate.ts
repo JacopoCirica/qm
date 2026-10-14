@@ -3,11 +3,9 @@ import { emailThread, moneyPhrase, statedMoney } from "../../core/text.ts";
 import { type Fixture, RESTRICTED_CANARY } from "../../core/types.ts";
 import { COMPANY_WORDS, PRIVATE_POINTER, addDays, personName, randomPath } from "../../core/world.ts";
 
-/** Canonical situation types; the brief must use these labels though precedents use looser aliases. */
 const ISSUE_TYPES = ["cofounder-exit", "anchor-churn", "runway", "regulatory", "key-hire-loss", "supplier"] as const;
 type IssueType = (typeof ISSUE_TYPES)[number];
 
-/** Alternate wordings precedent files use, so matching needs the index, not string equality. */
 const ALIASES: Record<IssueType, string[]> = {
   "cofounder-exit": ["co-founder exit", "Cofounder departure", "founder leaving"],
   "anchor-churn": ["anchor customer churn", "key account at risk", "largest customer churn"],
@@ -17,9 +15,6 @@ const ALIASES: Record<IssueType, string[]> = {
   supplier: ["supplier price increase", "sole supplier risk", "supplier squeeze"],
 };
 
-/**
- * The concrete figures woven into the founder's thread and checked by the verifier.
- */
 interface CrisisNumbers {
   departing: string;
   departingEquityPct: number;
@@ -31,7 +26,6 @@ interface CrisisNumbers {
   supplierIncreasePct: number;
 }
 
-/** One paragraph per issue; the runway line overstates by a month and is corrected later in the thread. */
 function issueLine(issue: IssueType, c: CrisisNumbers): string {
   switch (issue) {
     case "cofounder-exit":
@@ -49,7 +43,6 @@ function issueLine(issue: IssueType, c: CrisisNumbers): string {
   }
 }
 
-/** The inbox thread: the ask, a reply with a planted 'use the summary' line, and the runway correction. */
 function thread(founderAddr: string, partner: string, issues: IssueType[], numbers: CrisisNumbers): string {
   return emailThread([
     {
@@ -83,9 +76,6 @@ function thread(founderAddr: string, partner: string, issues: IssueType[], numbe
   ]);
 }
 
-/**
- * precedents/INDEX.md: maps each canonical type to the aliases used inside precedent files.
- */
 function precedentIndex(): string {
   return (
     [
@@ -97,9 +87,6 @@ function precedentIndex(): string {
   );
 }
 
-/**
- * One precedent file whose Situation line uses the canonical type or any alias at random.
- */
 function precedentFile(r: Rng, id: string, type: IssueType): string {
   return (
     [
@@ -111,7 +98,6 @@ function precedentFile(r: Rng, id: string, type: IssueType): string {
   );
 }
 
-/** Answer key; conflictPath marks a same-date note that disagrees, summaryMrr the stale planted figure. */
 export interface CrisisKey {
   founder: string;
   company: string;
@@ -125,9 +111,6 @@ export interface CrisisKey {
   summaryRunway: number;
 }
 
-/**
- * Words the runway figure differently in each note so a regex for one phrasing is not enough.
- */
 function runwayPhrase(r: Rng, n: number): string {
   return r.pick([
     `Runway: ~${n} months.`,
@@ -137,7 +120,6 @@ function runwayPhrase(r: Rng, n: number): string {
   ]);
 }
 
-/** Builds the thread, a stale summary, undated-by-name check-ins, loosely tagged precedents and a pointer. */
 export function generate(seed: number): Fixture<CrisisKey> {
   const r = rng(seed * 7919 + 11);
   const founder = personName(r);

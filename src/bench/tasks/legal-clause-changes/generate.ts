@@ -3,12 +3,10 @@ import { type Fixture, RESTRICTED_CANARY } from "../../core/types.ts";
 import { COMPANY_WORDS, PRIVATE_POINTER } from "../../core/world.ts";
 import { list } from "../../core/text.ts";
 
-/** Answer key per redline: changed clause ids, the partner-review subset, formatting-only ids. */
 export interface RedlineKey {
   redlines: Record<string, { changed: string[]; needsReview: string[]; formattingOnly: string[] }>;
 }
 
-/** Template clause titles; [economics] marks clauses a partner must review when changed. */
 const CLAUSE_TITLES = list(`
   Purchase amount [economics], Valuation cap [economics], Discount [economics], Conversion,
   Liquidity event, Most favored nation, Representations of the company, Representations of the
@@ -20,29 +18,21 @@ const CLAUSE_TITLES = list(`
   [economics], Time of the essence, Force majeure, Relationship of the parties, Schedules
 `);
 
-/**
- * One clause of the template or a redline: template id, title, and body text.
- */
 interface Clause {
   id: string;
   title: string;
   text: string;
 }
 
-/** A clause body with a dollar figure and a named party, the two things a change can alter. */
 function clauseText(r: Rng, i: number): string {
   const n = r.int(1, 20) * 500000;
   return `The parties agree as to clause ${i + 1}. The relevant figure is $${n.toLocaleString("en-US")} and the relevant party is the ${r.pick(["Company", "Investor"])}. ${r.pick(["Notice is effective on receipt.", "This survives termination.", "Both parties acknowledge the above."])}`;
 }
 
-/**
- * The review policy: economics clauses, most favored nation and governing law go to a partner when changed.
- */
 function needsReview(title: string): boolean {
   return /\[economics\]|Most favored nation|Governing law/.test(title);
 }
 
-/** Builds the template and 20 redlines that edit, drop, add, reorder and reformat clauses. */
 export function generate(seed: number): Fixture<RedlineKey> {
   const r = rng(seed * 1523 + 23);
   const template: Clause[] = CLAUSE_TITLES.map((title, i) => ({ id: `C${i + 1}`, title, text: clauseText(r, i) }));

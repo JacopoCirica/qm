@@ -3,7 +3,6 @@ import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type ConsolidateKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
-/** Consolidate five finance exports into one ledger using the README's rules and nothing else. */
 export function task(): BenchTask {
   return defineTask<ConsolidateKey>({
     id: "finance-consolidate-records",
@@ -22,7 +21,6 @@ export function task(): BenchTask {
   });
 }
 
-/** Reference answer: the key's ledger rows as CSV with two-decimal amounts. */
 export function gold(f: Fixture<ConsolidateKey>): Record<string, string> {
   return {
     "output/ledger.csv": csv(

@@ -1,4 +1,3 @@
-/** Task: diff each redline against the standard SAFE and route material changes to a partner. */
 import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type RedlineKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
@@ -20,9 +19,6 @@ export function task(): BenchTask {
   });
 }
 
-/**
- * Reference answer: the changed and needs-review ids from the key for every redline file.
- */
 export function gold(f: Fixture<RedlineKey>): Record<string, string> {
   const out: Record<string, { changed: string[]; needs_review: string[] }> = {};
   for (const [name, v] of Object.entries(f.key.redlines))

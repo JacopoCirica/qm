@@ -2,8 +2,6 @@ import { asArray, asRecord, parseJson, str } from "../../core/text.ts";
 import type { Check, Outputs } from "../../core/types.ts";
 import type { CommitmentsKey } from "./generate.ts";
 
-/** Checks owners and dates after corrections, tasks, the open set, overdue flags, row counts. */
-/** Fraction of expected commitments matched one-to-one by a row with the same owner, due date and task. */
 function matched(
   expected: Array<{ owner: string; task: string; due: string }>,
   rows: Record<string, unknown>[],

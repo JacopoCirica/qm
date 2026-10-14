@@ -1,4 +1,3 @@
-/** Task: report each closing packet's missing documents using its current round type. */
 import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type PacketKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
@@ -20,9 +19,6 @@ export function task(): BenchTask {
   });
 }
 
-/**
- * Reference answer: each packet's missing list straight from the key, complete when nothing is missing.
- */
 export function gold(f: Fixture<PacketKey>): Record<string, string> {
   const out: Record<string, { complete: boolean; missing: string[] }> = {};
   for (const [c, missing] of Object.entries(f.key.missing)) out[c] = { complete: missing.length === 0, missing };

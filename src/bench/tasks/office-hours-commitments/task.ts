@@ -2,7 +2,6 @@ import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type CommitmentsKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
-/** Commitments: extract dated promises, apply a second-turn correction, report what is open. */
 export function task(): BenchTask {
   return defineTask<CommitmentsKey>({
     id: "office-hours-commitments",
@@ -24,9 +23,6 @@ export function task(): BenchTask {
   });
 }
 
-/**
- * Reference answer: the corrected commitments and the open subset straight from the key.
- */
 export function gold(f: Fixture<CommitmentsKey>): Record<string, string> {
   return {
     "output/commitments.json": JSON.stringify(f.key.afterCorrections),

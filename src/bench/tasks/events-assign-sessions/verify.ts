@@ -3,7 +3,6 @@ import { constraintChecks } from "../../families/events-assign.ts";
 import { readAssignments } from "../../families/events.ts";
 import { type AssignKey, fixedSeats } from "./generate.ts";
 
-/** Rewards the shared constraint checks plus every speaker sitting in their own session. */
 export async function verify(outputs: Outputs, key: AssignKey): Promise<Check[]> {
   const { assign, rows } = readAssignments(await outputs.read("output/assignments.csv"));
   const fixed = fixedSeats(key);

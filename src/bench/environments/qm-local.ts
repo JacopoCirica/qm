@@ -10,13 +10,11 @@ import type { BenchCase } from "../dataset.ts";
 import { type Outputs } from "../core/types.ts";
 import { assertCasePath } from "../dataset.ts";
 
-/** What one agent turn came back with. */
 interface TurnOutcome {
   status: string;
   reply: string;
 }
 
-/** One open case: send turns, read output/, pull the session log, tear everything down. */
 interface CaseSession {
   turn(text: string): Promise<TurnOutcome>;
   outputs(): Promise<Outputs>;
@@ -24,13 +22,11 @@ interface CaseSession {
   close(): Promise<void>;
 }
 
-/** Where cases run. Swap this to run the same dataset somewhere other than the local Docker sandbox. */
 export interface Environment {
   open(benchCase: BenchCase, runId: string): Promise<CaseSession>;
   close(): Promise<void>;
 }
 
-/** Which harness and model to drive, plus an optional OpenAI-compatible endpoint as a custom provider. */
 export interface QmLocalOptions {
   harness: Config["harness"];
   modelId: string;
@@ -40,7 +36,6 @@ export interface QmLocalOptions {
   maxTokens?: number;
 }
 
-/** Wraps a prompt as a direct message from the case's actor, the way a Slack DM would arrive. */
 function dm(actorId: string, text: string): TurnRequest {
   return {
     surface: "bench",
@@ -50,7 +45,6 @@ function dm(actorId: string, text: string): TurnRequest {
   };
 }
 
-/** Boots one qm core on the local sandbox; each case gets a fresh actor, scope, computer, seeded files and cleanup. */
 export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Environment> {
   const dataDir = mkdtempSync(join(tmpdir(), "qm-bench-"));
   const config: Config = {
@@ -118,8 +112,7 @@ export async function qmLocalEnvironment(options: QmLocalOptions): Promise<Envir
       const scope = scopeId("personal", actorId);
       const sessionIds: string[] = [];
       const partnerScope = scopeId("personal", `${actorId}-partners`);
-      // The case's computer. A scope runs on the sandbox resource it routes to, so the
-      // case gets one of its own; retiring it removes the container, network and volume.
+
       const computer = await built.sandboxResources.create(actorId, scope, "local", benchCase.id);
       await built.sandboxResources.setDefault(actorId, scope, computer.id);
       const retire = async (): Promise<void> => {

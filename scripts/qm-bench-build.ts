@@ -1,7 +1,6 @@
 import { buildCases, parseVariants, writeCases } from "../src/bench/dataset.ts";
 import { allTasks } from "../src/bench/registry.ts";
 
-/** Writes the generated cases to a dataset directory (bench/cases by default); layout in dataset.ts. */
 const outDir = process.env.QM_BENCH_DATASET ?? "bench/cases";
 const variants = parseVariants(process.env.QM_BENCH_CASES ?? "1,2");
 

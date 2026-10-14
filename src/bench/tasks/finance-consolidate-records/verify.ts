@@ -2,7 +2,6 @@ import { f1, num, parseCsv } from "../../core/text.ts";
 import type { Check, Outputs } from "../../core/types.ts";
 import type { ConsolidateKey } from "./generate.ts";
 
-/** Rewards the header, row multiset vs the key, per-source counts and totals, ISO dates, dedup and signs. */
 export async function verify(outputs: Outputs, key: ConsolidateKey): Promise<Check[]> {
   const rows = parseCsv((await outputs.read("output/ledger.csv")) ?? "");
   const header = rows.length > 0 ? Object.keys(rows[0]!).join(",") : "";

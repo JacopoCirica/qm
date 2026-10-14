@@ -2,7 +2,6 @@ import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type PeersKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
-/** Find up to five peers for an intro request, honouring do-not-contact, updates and city. */
 export function task(): BenchTask {
   return defineTask<PeersKey>({
     id: "network-find-peers",
@@ -21,7 +20,6 @@ export function task(): BenchTask {
   });
 }
 
-/** Reference answer: up to five eligible people by directory name, same-city first, why quoting their phrase. */
 export function gold(f: Fixture<PeersKey>): Record<string, string> {
   const preferred = new Set(f.key.preferred);
   const ranked = [...f.key.eligible].sort((a, b) => Number(preferred.has(b)) - Number(preferred.has(a))).slice(0, 5);

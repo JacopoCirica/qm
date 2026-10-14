@@ -2,15 +2,11 @@ import { asArray, asRecord, close, f1, num, orderScore, parseJson, str } from ".
 import { type Check, type Outputs } from "../../core/types.ts";
 import { type TriageKey } from "./generate.ts";
 
-/**
- * Accepts reasons as an array or a delimited string, lowercased.
- */
 function reasonList(value: unknown): string[] {
   const parts = Array.isArray(value) ? value.map(str) : str(value).split(/[;,]/);
   return parts.map((x) => x.trim().toLowerCase()).filter(Boolean);
 }
 
-/** Checks the three thresholds exactly, the flagged set, reason codes, and the sort order. */
 export async function verify(outputs: Outputs, key: TriageKey): Promise<Check[]> {
   const o = asRecord(parseJson(await outputs.read("output/triage.json")));
   const rules = asRecord(o.rules);

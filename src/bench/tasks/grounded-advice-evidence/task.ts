@@ -2,7 +2,6 @@ import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type AdviceKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
-/** Infer the firm's thresholds from past memos and advise from the metrics sheet, not the founder's claim. */
 export function task(): BenchTask {
   return defineTask<AdviceKey>({
     id: "grounded-advice-evidence",
@@ -21,9 +20,6 @@ export function task(): BenchTask {
   });
 }
 
-/**
- * Reference answer copied from the key with the standard sources list.
- */
 export function gold(f: Fixture<AdviceKey>): Record<string, string> {
   const k = f.key;
   return {

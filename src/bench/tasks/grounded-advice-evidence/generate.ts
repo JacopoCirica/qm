@@ -3,7 +3,6 @@ import { csv } from "../../core/text.ts";
 import type { Fixture } from "../../core/types.ts";
 import { COMPANY_WORDS } from "../../core/world.ts";
 
-/** Answer key: the company's numbers, the recommendation they imply, and the two thresholds to infer. */
 export interface AdviceKey {
   latestMrr: number;
   growthPct: number;
@@ -14,23 +13,18 @@ export interface AdviceKey {
   growthThreshold: number;
 }
 
-/** The unwritten rule: enough runway means priced round, else strong growth means bridge, else cut burn. */
 function decide(runway: number, growth: number, tr: number, tg: number): AdviceKey["recommendation"] {
   if (runway >= tr) return "priced_round";
   if (growth >= tg) return "bridge";
   return "cut_burn";
 }
 
-/**
- * How each recommendation is phrased inside a memo.
- */
 const ADVICE_TEXT = {
   bridge: "we advised a bridge from existing investors",
   priced_round: "we advised going out for a priced round",
   cut_burn: "we advised cutting burn before raising anything",
 };
 
-/** Builds memos on the threshold boundaries, a sheet with competing restatements, and a misleading PS. */
 export function generate(seed: number): Fixture<AdviceKey> {
   const r = rng(seed * 104729 + 5);
   const tr = r.pick([5, 6, 7]);

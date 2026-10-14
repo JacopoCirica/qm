@@ -2,17 +2,14 @@ import type { Rng } from "../core/rng.ts";
 import { csv, list, parseCsv } from "../core/text.ts";
 import { COMPANY_WORDS, personName } from "../core/world.ts";
 
-/** The three breakout time slots of the event day. */
 export const SLOTS = ["T1", "T2", "T3"];
-/** Share of a session's seats one company may fill; the per-company cap in the published rules. */
+
 const COMPANY_SHARE = 0.15;
 
-/** Per-company seat cap for a session: 15% of capacity rounded up, never below two. */
 export function companyCap(capacity: number): number {
   return Math.max(2, Math.ceil(capacity * COMPANY_SHARE));
 }
 
-/** One breakout session: which slot it runs in and how many seats it has. */
 export interface Session {
   id: string;
   slot: string;
@@ -20,7 +17,6 @@ export interface Session {
   capacity: number;
 }
 
-/** One attendee: the slots they registered for and six ranked session preferences across all slots. */
 export interface Attendee {
   id: string;
   name: string;
@@ -29,13 +25,11 @@ export interface Attendee {
   prefs: string[];
 }
 
-/** The whole event: sessions and attendees. Both events tasks generate one of these. */
 export interface World {
   sessions: Session[];
   attendees: Attendee[];
 }
 
-/** Session titles, 24 of them, spread round-robin over the three slots. */
 const TITLES = list(`
   Pricing and packaging, Enterprise sales, Hiring your first ten, Fundraising, Infrastructure
   costs, Founder mental health, Design partners, Compliance early, Developer marketing, Cofounder
@@ -45,7 +39,6 @@ const TITLES = list(`
   production
 `);
 
-/** Generates an event, then scales capacities to about 108% of each slot's demand so seats are scarce. */
 export function buildWorld(r: Rng, attendeeCount: number): World {
   const sessions: Session[] = TITLES.map((title, i) => ({
     id: `S${i + 1}`,
@@ -77,15 +70,12 @@ export function buildWorld(r: Rng, attendeeCount: number): World {
   return { sessions, attendees };
 }
 
-/** attendee|slot to session id, the shape both the gold solver and the verifier work in. */
 export type Assignment = Map<string, string>;
 
-/** Builds the attendee|slot key an Assignment is indexed by. */
 export function assignKey(attendee: string, slot: string): string {
   return `${attendee}|${slot}`;
 }
 
-/** Parses an agent's assignments.csv into an Assignment, upper-casing ids so case never decides a score. */
 export function readAssignments(text: string | null): { assign: Assignment; rows: number } {
   const assign: Assignment = new Map();
   const rows = parseCsv(text ?? "");
@@ -97,7 +87,6 @@ export function readAssignments(text: string | null): { assign: Assignment; rows
   return { assign, rows: rows.length };
 }
 
-/** The rules.md the agent reads. The gold solver follows exactly these. */
 function rules(): string {
   return (
     [
@@ -113,7 +102,6 @@ function rules(): string {
   );
 }
 
-/** The files an events case seeds into the sandbox: rules, sessions and attendees. */
 export function worldFiles(world: World): Record<string, string> {
   return {
     "events/rules.md": rules(),
@@ -128,7 +116,6 @@ export function worldFiles(world: World): Record<string, string> {
   };
 }
 
-/** Writes an Assignment as the assignments.csv deliverable, sorted for stable diffs. */
 export function assignmentCsv(assign: Assignment): string {
   return csv(
     ["attendee_id", "slot", "session_id"],

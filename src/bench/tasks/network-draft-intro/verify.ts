@@ -2,7 +2,6 @@ import { asArray, asRecord, includesAny, parseJson, str, words } from "../../cor
 import type { Check, Outputs } from "../../core/types.ts";
 import { BANNED, type IntroKey, type Target } from "./generate.ts";
 
-/** Rewards one entry per person, blocked people skipped, and each policy rule per written email. */
 export async function verify(outputs: Outputs, key: IntroKey): Promise<Check[]> {
   const rows = asArray(parseJson(await outputs.read("output/intros.json"))).map(asRecord);
   const entry = (t: Target): Record<string, unknown> | undefined =>

@@ -3,7 +3,6 @@ import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type CompanyRow, type UpdateKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
-/** Update records: apply founder threads to the portfolio CSV, changing only supported cells. */
 export function task(): BenchTask {
   return defineTask<UpdateKey>({
     id: "portfolio-update-records",
@@ -22,9 +21,6 @@ export function task(): BenchTask {
   });
 }
 
-/**
- * Reference CSV serialised from the key's expected rows.
- */
 export function gold(f: Fixture<UpdateKey>): Record<string, string> {
   return {
     "output/companies.csv": csv(

@@ -2,14 +2,12 @@ import { asArray, asRecord, parseJson, str } from "../../core/text.ts";
 import type { Check, Outputs } from "../../core/types.ts";
 import { type PeersKey, personKey } from "./generate.ts";
 
-/** Share of wanted same-city picks made; fewer preferred people than slots lowers the bar. */
 function cityScore(keys: string[], preferred: Set<string>, want: number): number {
   if (keys.length === 0) return 0;
   if (want === 0) return 1;
   return Math.min(1, keys.filter((k) => preferred.has(k)).length / want);
 }
 
-/** Rewards eligibility, filled slots, city preference, no blocked or duplicate picks, and why. */
 export async function verify(outputs: Outputs, key: PeersKey): Promise<Check[]> {
   const rows = asArray(parseJson(await outputs.read("output/peers.json"))).map(asRecord);
   const keys = rows.map((r) => personKey(str(r.name) || "?", str(r.company)));

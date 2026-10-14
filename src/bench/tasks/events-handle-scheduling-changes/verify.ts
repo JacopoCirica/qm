@@ -3,7 +3,6 @@ import { constraintChecks } from "../../families/events-assign.ts";
 import { readAssignments } from "../../families/events.ts";
 import type { ChangesKey } from "./generate.ts";
 
-/** Rewards the shared checks on the final world plus minimal churn, withdrawals gone, cancelled session empty. */
 export async function verify(outputs: Outputs, key: ChangesKey): Promise<Check[]> {
   const { assign, rows } = readAssignments(await outputs.read("output/assignments.csv"));
   const base = constraintChecks(key.finalWorld, assign, rows, key.baselineTop2);

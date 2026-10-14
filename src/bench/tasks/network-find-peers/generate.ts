@@ -4,13 +4,11 @@ import { type Fixture, RESTRICTED_CANARY } from "../../core/types.ts";
 import { CITIES, COMPANY_WORDS, PRIVATE_POINTER, SECTORS, addDays, nameVariant, personName } from "../../core/world.ts";
 import { TOPICS } from "../../families/network.ts";
 
-/** A person as the directory spells them: full name and company. */
 interface DirectoryPerson {
   name: string;
   company: string;
 }
 
-/** One community member as the generator sees them. Files show a projection of this with names rewritten. */
 interface Person extends DirectoryPerson {
   email: string;
   sector: string;
@@ -18,7 +16,6 @@ interface Person extends DirectoryPerson {
   expertise: string[];
 }
 
-/** Answer key after updates: eligible, same-city and blocked people, each matched phrase, and each eligible person. */
 export interface PeersKey {
   topic: string;
   sector: string;
@@ -30,13 +27,11 @@ export interface PeersKey {
   personOf: Record<string, DirectoryPerson>;
 }
 
-/** Off-topic expertise phrases used as noise so most of the directory is irrelevant to the ask. */
 const OTHER = list(`
   developer marketing, open source, payments compliance, supply chain, GPU procurement, growth
   loops, port operations, clinical trials, hardware manufacturing
 `);
 
-/** Identity across files: surname plus company, lower-cased, as the README tells the agent. */
 export function personKey(name: string, company: string): string {
   const trimmed = name.trim();
   const comma = trimmed.indexOf(",");
@@ -44,12 +39,10 @@ export function personKey(name: string, company: string): string {
   return `${last.toLowerCase()}|${company.toLowerCase().replace(/\s+/g, "")}`;
 }
 
-/** Half the time returns the requester's own value, so an update can make someone eligible. */
 function homeOr(r: Rng, home: string, pool: readonly string[]): string {
   return r.chance(0.5) ? home : r.pick(pool);
 }
 
-/** Builds directory/updates.csv and applies it to people; the latest change per field wins. */
 function applyUpdates(r: Rng, people: Person[], topicPhrases: string[], sector: string, city: string): string[][] {
   const rows: string[][] = [];
   const onTopic = people.filter((p) => p.expertise.some((e) => topicPhrases.includes(e)));
@@ -65,7 +58,6 @@ function applyUpdates(r: Rng, people: Person[], topicPhrases: string[], sector: 
   return r.shuffle(rows);
 }
 
-/** Builds an 1,800-person community in three exports with name variants, updates and traps. */
 export function generate(seed: number): Fixture<PeersKey> {
   const r = rng(seed * 9973 + 4);
   const topic = r.pick(TOPICS);

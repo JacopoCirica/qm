@@ -2,7 +2,6 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { dirname, join, relative } from "node:path";
 import { type BenchTask } from "./core/types.ts";
 
-/** One case as plain data, the unit the runner consumes whether generated or loaded from disk. */
 export interface BenchCase {
   id: string;
   task: string;
@@ -17,7 +16,6 @@ export interface BenchCase {
   key: unknown;
 }
 
-/** Materialises every task at every variant number into BenchCases. */
 export function buildCases(tasks: BenchTask[], variants: number[]): BenchCase[] {
   return tasks.flatMap((task) =>
     variants.map((variant) => {
@@ -39,7 +37,6 @@ export function buildCases(tasks: BenchTask[], variants: number[]): BenchCase[] 
   );
 }
 
-/** Case variants named by a QM_BENCH_CASES value: positive integers, each once, in the order first given. */
 export function parseVariants(spec: string): number[] {
   const variants = new Set<number>();
   for (const part of spec.split(",")) {
@@ -49,7 +46,6 @@ export function parseVariants(spec: string): number[] {
   return [...variants];
 }
 
-/** Rejects a case path that could leave its root: absolute, backslashes, or a .. segment. */
 export function assertCasePath(path: string): string {
   const parts = path.split("/");
   if (path.startsWith("/") || path.includes("\\") || parts.some((p) => p === "" || p === "." || p === ".."))
@@ -57,7 +53,6 @@ export function assertCasePath(path: string): string {
   return path;
 }
 
-/** Writes a path-to-body map under a root directory. */
 function writeTree(root: string, files: Record<string, string>): void {
   for (const [path, body] of Object.entries(files)) {
     const full = join(root, assertCasePath(path));
@@ -66,7 +61,6 @@ function writeTree(root: string, files: Record<string, string>): void {
   }
 }
 
-/** Reads a directory back into a path-to-body map; a missing root reads as empty. */
 function readTree(root: string): Record<string, string> {
   const out: Record<string, string> = {};
   const walk = (dir: string): void => {
@@ -80,7 +74,6 @@ function readTree(root: string): Record<string, string> {
   return out;
 }
 
-/** Writes cases to <dir>/<case>/{case.json,files/,private/}, wiping the directory first. */
 export function writeCases(dir: string, cases: BenchCase[]): void {
   rmSync(dir, { recursive: true, force: true });
   for (const c of cases) {
@@ -93,7 +86,6 @@ export function writeCases(dir: string, cases: BenchCase[]): void {
   }
 }
 
-/** Loads a dataset directory written by writeCases, checking each folder holds the case it is named for. */
 export function loadCases(dir: string): BenchCase[] {
   return readdirSync(dir)
     .filter((name) => statSync(join(dir, name)).isDirectory())

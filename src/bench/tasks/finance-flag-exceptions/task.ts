@@ -2,7 +2,6 @@ import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type ExceptionsKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
-/** Infer the expense policy from last month's audit and flag every exception this month, one per rule. */
 export function task(): BenchTask {
   return defineTask<ExceptionsKey>({
     id: "finance-flag-exceptions",
@@ -20,7 +19,6 @@ export function task(): BenchTask {
   });
 }
 
-/** Reference answer: the three inferred thresholds and the expected id|rule pairs as objects. */
 export function gold(f: Fixture<ExceptionsKey>): Record<string, string> {
   const k = f.key;
   return {

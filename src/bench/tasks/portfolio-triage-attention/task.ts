@@ -2,7 +2,6 @@ import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type TriageKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
-/** Triage: infer the partners' unwritten thresholds from past decisions and apply them now. */
 export function task(): BenchTask {
   return defineTask<TriageKey>({
     id: "portfolio-triage-attention",
@@ -20,9 +19,6 @@ export function task(): BenchTask {
   });
 }
 
-/**
- * Reference answer: the key's thresholds and flagged list.
- */
 export function gold(f: Fixture<TriageKey>): Record<string, string> {
   return {
     "output/triage.json": JSON.stringify({

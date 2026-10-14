@@ -49,7 +49,6 @@ import {
   task as knowledgeRefreshStale,
 } from "./tasks/knowledge-refresh-stale/task.ts";
 
-/** Every task in taxonomy order; a new task is a folder under tasks/, one line here and one in GOLD. */
 export function allTasks(): BenchTask[] {
   return [
     founderCrisisBrief(),
@@ -71,10 +70,8 @@ export function allTasks(): BenchTask[] {
   ];
 }
 
-/** A gold solution: writes the correct deliverables straight from the answer key. */
 type Gold = (fixture: Fixture<never>) => Record<string, string>;
 
-/** Gold solutions by task id. They are exported next to each task but never placed on the task object, so nothing hands them to a sandbox. */
 const GOLD: Record<string, Gold> = {
   "founder-crisis-brief": founderCrisisBriefGold as Gold,
   "grounded-advice-evidence": groundedAdviceEvidenceGold as Gold,
@@ -94,14 +91,12 @@ const GOLD: Record<string, Gold> = {
   "knowledge-refresh-stale": knowledgeRefreshStaleGold as Gold,
 };
 
-/** The correct deliverables for a fixture. Tests grade these to prove every case is solvable. */
 export function goldOutputs(task: BenchTask, fixture: Fixture<unknown>): Record<string, string> {
   const gold = GOLD[task.id];
   if (!gold) throw new Error(`no gold solution registered for ${task.id}`);
   return gold(fixture as Fixture<never>);
 }
 
-/** Looks up the verifier for a task id, which is how a case loaded from disk finds its grader. */
 export function verifierFor(taskId: string): Verifier {
   const task = allTasks().find((t) => t.id === taskId);
   if (!task) throw new Error(`no verifier registered for task ${taskId}`);

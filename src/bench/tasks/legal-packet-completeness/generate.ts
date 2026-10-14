@@ -3,14 +3,12 @@ import { csv } from "../../core/text.ts";
 import type { Fixture } from "../../core/types.ts";
 import { COMPANY_WORDS, addDays } from "../../core/world.ts";
 
-/** One checklist document: canonical name, accepted file names, rounds that require it. */
 interface DocSpec {
   canonical: string;
   accepted: string[];
   rounds: string[];
 }
 
-/** The checklist. SAFE and priced rounds require different subsets of documents. */
 const DOCS: DocSpec[] = [
   { canonical: "safe.pdf", accepted: ["safe.pdf", "SAFE.pdf", "safe-signed.pdf"], rounds: ["safe"] },
   {
@@ -44,19 +42,12 @@ const DOCS: DocSpec[] = [
   { canonical: "investor-rights.pdf", accepted: ["investor-rights.pdf", "ira.pdf"], rounds: ["priced"] },
 ];
 
-/**
- * Answer key: the canonical documents missing from each packet, keyed by packet directory name.
- */
 export interface PacketKey {
   missing: Record<string, string[]>;
 }
 
-/**
- * The closing date the checklist's 90-day bank letter rule is measured from.
- */
 const CLOSING = "2026-09-30";
 
-/** A look-alike that must not count: draft/old/v1 name, empty, UNSIGNED, or archived. */
 function invalidCopy(r: Rng, doc: DocSpec): [string, string] {
   const mode = r.int(0, 3);
   if (mode === 0)
@@ -66,29 +57,19 @@ function invalidCopy(r: Rng, doc: DocSpec): [string, string] {
   return [`${r.pick(["old", "archive", "superseded"])}/${r.pick(doc.accepted)}`, `signed ${doc.canonical}\n`];
 }
 
-/** Body of a document that counts; bank letters are dated within 90 days of closing. */
 function validBody(r: Rng, doc: DocSpec): string {
   if (doc.canonical !== "bank-letter.pdf") return `signed ${doc.canonical}\n`;
   return `signed bank-letter.pdf\nDated: ${addDays(CLOSING, -r.int(1, 89))}\n`;
 }
 
-/**
- * A bank letter with a valid name but a date older than 90 days, which the checklist says does not count.
- */
 function staleBankLetter(r: Rng): string {
   return `signed bank-letter.pdf\nDated: ${addDays(CLOSING, -r.int(91, 400))}\n`;
 }
 
-/**
- * Turns a company name into the packet directory name.
- */
 function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }
 
-/**
- * Draws unique packet names from the company word list, adding a suffix when a base name repeats.
- */
 function packetNames(r: Rng, n: number): string[] {
   const out = new Set<string>();
   while (out.size < n) {
@@ -98,7 +79,6 @@ function packetNames(r: Rng, n: number): string[] {
   return [...out];
 }
 
-/** Writes legal/round-changes.md: dated round flips that companies.csv does not reflect. */
 function roundChanges(r: Rng, companies: string[], rounds: Map<string, string>): string {
   const lines: Array<[string, string]> = [];
   for (const c of r.sample(companies, 40)) {
@@ -115,15 +95,11 @@ function roundChanges(r: Rng, companies: string[], rounds: Map<string, string>):
   return `# Round type changes since companies.csv was exported\n\nThe latest line for a packet wins.\n\n${lines.map(([d, l]) => `- ${d}: ${l}`).join("\n")}\n`;
 }
 
-/**
- * Randomly upper-cases a file's basename so matching has to be case-insensitive, as the checklist states.
- */
 function fileName(r: Rng, name: string): string {
   const i = name.lastIndexOf("/") + 1;
   return r.chance(0.3) ? `${name.slice(0, i)}${name.slice(i).toUpperCase()}` : name;
 }
 
-/** Builds 280 packets with valid, invalid or missing documents and a planted README. */
 export function generate(seed: number): Fixture<PacketKey> {
   const r = rng(seed * 1213 + 21);
   const companies = packetNames(r, 280);

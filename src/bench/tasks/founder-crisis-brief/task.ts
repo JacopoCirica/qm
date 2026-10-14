@@ -2,7 +2,6 @@ import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type CrisisKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
-/** Write a grounded crisis brief from a founder thread, check-in notes and precedents; report conflicts. */
 export function task(): BenchTask {
   return defineTask<CrisisKey>({
     id: "founder-crisis-brief",
@@ -23,7 +22,6 @@ export function task(): BenchTask {
   });
 }
 
-/** Reference brief from the key: corrected runway, newest-note MRR or a reported conflict, precedents. */
 export function gold(f: Fixture<CrisisKey>): Record<string, string> {
   const k = f.key;
   return {

@@ -12,7 +12,6 @@ import type { ConsolidateKey } from "../src/bench/tasks/finance-consolidate-reco
 import type { ExceptionsKey } from "../src/bench/tasks/finance-flag-exceptions/generate.ts";
 import type { FactsKey } from "../src/bench/tasks/knowledge-capture-facts/generate.ts";
 
-/** Seeds every oracle sweeps; a key that a reader of the files cannot reproduce fails here, not in a model run. */
 const SEEDS = Array.from({ length: 20 }, (_, i) => i + 1);
 
 const SMALL: Record<string, number> = Object.fromEntries(
@@ -31,7 +30,6 @@ const TENS: Record<string, number> = {
   ninety: 90,
 };
 
-/** Reads an English number the way a person does: "forty-two thousand five hundred" is 42500. */
 function wordsToNumber(text: string): number {
   let total = 0;
   let current = 0;
@@ -50,7 +48,6 @@ function wordsToNumber(text: string): number {
   return total + current;
 }
 
-/** Reads a dollar phrase in any of the bench's styles as a reader would, in whole dollars. */
 function moneyValue(text: string): number {
   let m: RegExpExecArray | null;
   if ((m = /^\$([\d.]+) thousand$/.exec(text))) return Math.round(Number(m[1]) * 1000);
@@ -72,14 +69,12 @@ test("a money phrase states exactly the value the generator keys, in every style
   assert.deepEqual(moneyValue("$83.5k"), 83500);
 });
 
-/** One message of a generated thread: sender, date and its own unquoted body. */
 interface Mail {
   from: string;
   date: string;
   body: string;
 }
 
-/** Splits an emailThread rendering back into messages, dropping quoted history. */
 function parseThread(text: string): Mail[] {
   const mails: Mail[] = [];
   for (const block of text.split(/^-----$/m)) {
@@ -103,7 +98,6 @@ function parseThread(text: string): Mail[] {
 
 const domainOf = (from: string): string => /@([^>]+)>/.exec(from)?.[1] ?? "";
 
-/** What one founder message states, read the way the README says to read it. */
 function statedValues(body: string, eurRate: number): { mrr?: number; head?: number } {
   const out: { mrr?: number; head?: number } = {};
   let m: RegExpExecArray | null;
@@ -116,7 +110,6 @@ function statedValues(body: string, eurRate: number): { mrr?: number; head?: num
   return out;
 }
 
-/** Solves portfolio-update-records from its files alone, following the prompt and README literally. */
 function solvePortfolio(files: Record<string, string>): Array<Record<string, string>> {
   const rows = parseCsv(files["portfolio/companies.csv"]!);
   const slugByDomain = new Map(
@@ -166,13 +159,11 @@ test("portfolio-update-records: a literal reader of the files reproduces the key
   }
 });
 
-/** EUR to USD the way the README states it: to the cent, half-cents up, without floating-point rounding luck. */
 function readerEurToUsd(eur: number, rate: number): number {
   const product = Math.round(eur * 100) * Math.round(rate * 100);
   return Math.floor((product + 50) / 100) / 100;
 }
 
-/** One consolidated ledger row as a reader would produce it. */
 interface LedgerRow {
   date: string;
   amount: number;
@@ -181,7 +172,6 @@ interface LedgerRow {
   ref: string;
 }
 
-/** Solves finance-consolidate-records from its files alone, applying only the README's rules. */
 function solveLedger(files: Record<string, string>): LedgerRow[] {
   const rate = Number(parseCsv(files["finance/fx.csv"]!)[0]!.usd_per_unit);
   const rows: LedgerRow[] = [];
@@ -249,7 +239,6 @@ test("finance-consolidate-records: a literal reader of the exports reproduces ev
   }
 });
 
-/** Solves finance-flag-exceptions from its files alone: thresholds from the audit's own boundary verdicts, then the rules. */
 function solveExceptions(files: Record<string, string>): {
   mealLimit: number;
   receiptFloor: number;

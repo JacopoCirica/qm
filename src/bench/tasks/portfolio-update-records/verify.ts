@@ -2,7 +2,6 @@ import { close, num, parseCsv } from "../../core/text.ts";
 import { type Check, type Outputs } from "../../core/types.ts";
 import { type UpdateKey } from "./generate.ts";
 
-/** Checks header, row order, updated mrr, headcount and last_update cells, and untouched cells. */
 export async function verify(outputs: Outputs, key: UpdateKey): Promise<Check[]> {
   const rows = parseCsv((await outputs.read("output/companies.csv")) ?? "");
   const by = new Map(rows.map((r) => [r.slug ?? "", r] as const));

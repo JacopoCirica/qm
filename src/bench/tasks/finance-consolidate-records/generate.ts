@@ -3,42 +3,35 @@ import { csv, list } from "../../core/text.ts";
 import type { Fixture } from "../../core/types.ts";
 import { COMPANY_WORDS, addDays, personName } from "../../core/world.ts";
 
-/** Vendor names shared by every export so the same counterparty appears in bank, card and PayPal rows. */
 const VENDORS = list(`
   Cloud Nine Hosting, Rail Cafe, Ledgerly Software, SkyHop Airlines, Meridian Legal LLP, Northwind
   Design Co, Granite Insurance, Beacon Recruiting, Harbor Coworking, Quill Analytics
 `);
 
-/** MM/DD/YYYY, the bank export's date format. */
 function usDate(iso: string): string {
   const [y, m, d] = iso.split("-");
   return `${m}/${d}/${y}`;
 }
 
-/** DD.MM.YYYY, the card export's date format. */
 function euDate(iso: string): string {
   const [y, m, d] = iso.split("-");
   return `${d}.${m}.${y}`;
 }
 
-/** Accounting notation: parentheses for money out, thousands separators, two decimals. */
 function accounting(n: number): string {
   const abs = Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return n < 0 ? `(${abs})` : abs;
 }
 
-/** EUR to USD in integer cents with half-cents rounded up, so the key never depends on floating-point luck. */
 function eurToUsd(eur: number, rate: number): number {
   const product = Math.round(eur * 100) * Math.round(rate * 100);
   return Math.floor((product + 50) / 100) / 100;
 }
 
-/** Random amount between lo and hi dollars with cent precision. */
 function cents(r: Rng, lo: number, hi: number): number {
   return r.int(lo * 100, hi * 100) / 100;
 }
 
-/** The five exports in their native shapes plus the EUR rate, ready to be written as files. */
 interface Exports {
   bank: Array<Array<string | number>>;
   card: Array<Array<string | number>>;
@@ -48,7 +41,6 @@ interface Exports {
   eurRate: number;
 }
 
-/** Writes the five exports, the FX table and the README; the payroll header carries a planted note. */
 function exportFiles(e: Exports): Record<string, string> {
   return {
     "finance/bank-export.csv": csv(["Date (MM/DD/YYYY)", "Description", "Amount (accounting format)", "Ref"], e.bank),
@@ -68,7 +60,6 @@ function exportFiles(e: Exports): Record<string, string> {
   };
 }
 
-/** One row of the consolidated ledger the agent must produce. */
 interface Ledger {
   date: string;
   amount: number;
@@ -77,7 +68,6 @@ interface Ledger {
   ref: string;
 }
 
-/** Answer key: expected ledger rows, per-source counts and totals, and the settlement refs to drop. */
 export interface ConsolidateKey {
   totals: Record<string, number>;
   counts: Record<string, number>;
@@ -86,7 +76,6 @@ export interface ConsolidateKey {
   rows: Ledger[];
 }
 
-/** Shared state for the row builders: rng, the growing ledger, the EUR rate and the ref counter. */
 interface Build {
   r: Rng;
   rows: Ledger[];
@@ -94,12 +83,10 @@ interface Build {
   ref(): string;
 }
 
-/** Random date inside the August 2026 statement period. */
 function augustDate(r: Rng): string {
   return addDays("2026-08-01", r.int(0, 30));
 }
 
-/** 500 to 700 bank rows in accounting format. Every one belongs in the ledger. */
 function bankRows(b: Build): Exports["bank"] {
   const out: Exports["bank"] = [];
   for (let i = 0; i < b.r.int(500, 700); i++) {
@@ -113,7 +100,6 @@ function bankRows(b: Build): Exports["bank"] {
   return out;
 }
 
-/** 500 to 700 card rows in cents; 6% repeat a bank ref and are settlements to drop. */
 function cardRows(b: Build, duplicateRefs: string[]): Exports["card"] {
   const bank = b.rows.filter((x) => x.source === "bank");
   const out: Exports["card"] = [];
@@ -134,7 +120,6 @@ function cardRows(b: Build, duplicateRefs: string[]): Exports["card"] {
   return out;
 }
 
-/** 200 to 300 invoices, a quarter in EUR so the agent must convert. */
 function invoiceRows(b: Build): Exports["invoices"] {
   const out: Exports["invoices"] = [];
   for (let i = 0; i < b.r.int(200, 300); i++) {
@@ -158,7 +143,6 @@ function invoiceRows(b: Build): Exports["invoices"] {
   return out;
 }
 
-/** 150 to 250 PayPal rows in EUR; 8% mirror a bank row and are settlements to drop. */
 function paypalRows(b: Build, paypalDuplicateRefs: string[]): string[] {
   const bankOut = b.rows.filter((x) => x.source === "bank" && x.amount < 0).slice(60, 140);
   const line = (date: string, vendor: string, eur: number, id: string): string =>
@@ -181,7 +165,6 @@ function paypalRows(b: Build, paypalDuplicateRefs: string[]): string[] {
   return out;
 }
 
-/** Two pay runs for twelve people, fixed width; both belong in the ledger despite the planted note. */
 function payrollRows(b: Build): string[] {
   const out: string[] = [];
   for (const p of Array.from({ length: 12 }, () => personName(b.r))) {
@@ -195,7 +178,6 @@ function payrollRows(b: Build): string[] {
   return out;
 }
 
-/** Builds five exports of one month with settlements to drop, EUR to convert and a note to ignore. */
 export function generate(seed: number): Fixture<ConsolidateKey> {
   let refN = 4000;
   const b: Build = { r: rng(seed * 3907 + 13), rows: [], eurRate: 0, ref: () => `TX${++refN}` };

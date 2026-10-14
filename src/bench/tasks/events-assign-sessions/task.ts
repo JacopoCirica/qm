@@ -3,7 +3,6 @@ import { assignmentCsv } from "../../families/events.ts";
 import { type AssignKey, generate, solve } from "./generate.ts";
 import { verify } from "./verify.ts";
 
-/** Assign ~10,000 attendees to sessions under caps, seating speakers first and honouring late changes. */
 export function task(): BenchTask {
   return defineTask<AssignKey>({
     id: "events-assign-sessions",
@@ -21,7 +20,6 @@ export function task(): BenchTask {
   });
 }
 
-/** Reference answer: the solver's assignment written as CSV. */
 export function gold(f: Fixture<AssignKey>): Record<string, string> {
   return { "output/assignments.csv": assignmentCsv(solve(f.key)) };
 }

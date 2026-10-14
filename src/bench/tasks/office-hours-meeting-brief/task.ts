@@ -2,7 +2,6 @@ import { type BenchTask, type Fixture, defineTask } from "../../core/types.ts";
 import { type BriefKey, generate } from "./generate.ts";
 import { verify } from "./verify.ts";
 
-/** Meeting brief: rebuild the day's schedule from the calendar, the ops chat and newest emails. */
 export function task(): BenchTask {
   return defineTask<BriefKey>({
     id: "office-hours-meeting-brief",
@@ -21,9 +20,6 @@ export function task(): BenchTask {
   });
 }
 
-/**
- * Reference brief serialised from the key's final slots.
- */
 export function gold(f: Fixture<BriefKey>): Record<string, string> {
   return {
     "output/brief.json": JSON.stringify({

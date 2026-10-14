@@ -3,16 +3,12 @@ import type { Fixture } from "../../core/types.ts";
 import { addDays, personName } from "../../core/world.ts";
 import { list } from "../../core/text.ts";
 
-/**
- * One promise: who, what, and the ISO due date.
- */
 interface Commitment {
   owner: string;
   task: string;
   due: string;
 }
 
-/** Answer key: commitments after corrections, the open subset, and the corrections themselves. */
 export interface CommitmentsKey {
   founder: string;
   partner: string;
@@ -22,9 +18,6 @@ export interface CommitmentsKey {
   corrections: { movedA: Commitment; movedB: Commitment; cancelled: Commitment; added: Commitment };
 }
 
-/**
- * Pool of things a founder or partner can promise to do.
- */
 const COMMITMENT_TASKS = list(`
   send the updated deck, make the intro to the bank, share the hiring plan, ship the self-serve
   tier, review the pricing page, send the security questionnaire, book the customer call, draft
@@ -32,22 +25,15 @@ const COMMITMENT_TASKS = list(`
   the offsite
 `);
 
-/**
- * Suffix for a day of month, used when a date is spoken as 'by the 14th'.
- */
 function ordinal(day: number): string {
   if (day >= 11 && day <= 13) return "th";
   return ["th", "st", "nd", "rd"][day % 10 > 3 ? 0 : day % 10]!;
 }
 
-/**
- * Day of month of an ISO date.
- */
 function dayOf(iso: string): number {
   return new Date(`${iso}T00:00:00Z`).getUTCDate();
 }
 
-/** Relative phrasings and their offsets from the meeting date in the transcript header. */
 const RELATIVE: Array<[string, number]> = [
   ["a week from today", 7],
   ["in ten days", 10],
@@ -55,30 +41,24 @@ const RELATIVE: Array<[string, number]> = [
   ["three weeks from today", 21],
 ];
 
-/**
- * Last day of the month containing the given date, for 'by the end of the month'.
- */
 function endOfMonth(iso: string): string {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCMonth(d.getUTCMonth() + 1, 0);
   return d.toISOString().slice(0, 10);
 }
 
-/** How a due date is spoken: end of month, a relative phrase when one fits, or the bare day. */
 function askFor(r: Rng, meetingDate: string, due: string): string {
   if (due === endOfMonth(meetingDate)) return "by the end of the month";
   const rel = RELATIVE.find(([, days]) => addDays(meetingDate, days) === due);
   return rel && r.chance(0.7) ? rel[0] : `by the ${dayOf(due)}${ordinal(dayOf(due))}`;
 }
 
-/** Picks a due date, biased toward ones that can be spoken relatively so forms are mixed. */
 function dueFor(r: Rng, meetingDate: string): string {
   if (r.chance(0.15)) return endOfMonth(meetingDate);
   if (r.chance(0.5)) return addDays(meetingDate, r.pick(RELATIVE)[1]);
   return addDays(meetingDate, r.int(2, 24));
 }
 
-/** Builds eight commitments in mixed date forms amid filler, then corrections and a done list. */
 export function generate(seed: number): Fixture<CommitmentsKey> {
   const r = rng(seed * 48611 + 9);
   const founder = personName(r);

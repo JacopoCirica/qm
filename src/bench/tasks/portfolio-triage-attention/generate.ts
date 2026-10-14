@@ -3,17 +3,11 @@ import { csv } from "../../core/text.ts";
 import { type Fixture } from "../../core/types.ts";
 import { companyNames, slugify } from "../../families/portfolio.ts";
 
-/**
- * One flagged company and its reason codes.
- */
 interface TriageEntry {
   slug: string;
   reasons: string[];
 }
 
-/**
- * Answer key: the ordered flagged list and the three thresholds the agent must infer.
- */
 export interface TriageKey {
   flagged: TriageEntry[];
   runwayBelow: number;
@@ -21,18 +15,12 @@ export interface TriageKey {
   growthBelow: number;
 }
 
-/**
- * The unwritten thresholds: runway strictly under, days-since-update strictly over, growth strictly under.
- */
 interface Rules {
   runwayBelow: number;
   staleAfter: number;
   growthBelow: number;
 }
 
-/**
- * One company's row in the portfolio export or the decision history.
- */
 interface Metrics {
   slug: string;
   name: string;
@@ -42,9 +30,6 @@ interface Metrics {
   open_incident: string;
 }
 
-/**
- * Applies the rules to one row and returns the reason codes in the partners' fixed order.
- */
 function reasonsFor(c: Metrics, rules: Rules): string[] {
   const reasons: string[] = [];
   if (c.runway_months < rules.runwayBelow) reasons.push("low-runway");
@@ -54,9 +39,6 @@ function reasonsFor(c: Metrics, rules: Rules): string[] {
   return reasons;
 }
 
-/**
- * Random metrics for a company, with overrides for boundary rows.
- */
 function metrics(r: Rng, name: string, over: Partial<Metrics> = {}): Metrics {
   return {
     slug: slugify(name),
@@ -69,7 +51,6 @@ function metrics(r: Rng, name: string, over: Partial<Metrics> = {}): Metrics {
   };
 }
 
-/** Six history rows on and one step past each threshold settle strict versus inclusive. */
 function boundaryCases(r: Rng, names: string[], { runwayBelow, staleAfter, growthBelow }: Rules): Metrics[] {
   return [
     metrics(r, names[0]!, {
@@ -101,7 +82,6 @@ function boundaryCases(r: Rng, names: string[], { runwayBelow, staleAfter, growt
   ];
 }
 
-/** The current export as an append-only table where only a slug's latest as_of row counts. */
 function currentRows(r: Rng, current: Metrics[]): Array<Array<string | number>> {
   const row = (c: Metrics, asOf: string): Array<string | number> => [
     c.slug,
@@ -121,7 +101,6 @@ function currentRows(r: Rng, current: Metrics[]): Array<Array<string | number>> 
   return r.shuffle(rows);
 }
 
-/** Builds random thresholds, 120 past decisions with boundary rows, and 180 current companies. */
 export function generate(seed: number): Fixture<TriageKey> {
   const r = rng(seed * 6007 + 2);
   const rules: Rules = {

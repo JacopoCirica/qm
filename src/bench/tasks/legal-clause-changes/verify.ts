@@ -2,7 +2,6 @@ import { asArray, asRecord, f1, parseJson, str } from "../../core/text.ts";
 import type { Check, Outputs } from "../../core/types.ts";
 import type { RedlineKey } from "./generate.ts";
 
-/** Scores changed and needs_review as F1 per redline plus formatting-only ids left out. */
 export async function verify(outputs: Outputs, key: RedlineKey): Promise<Check[]> {
   const o = asRecord(parseJson(await outputs.read("output/clause-review.json")));
   const names = Object.keys(key.redlines);

@@ -20,6 +20,20 @@ How it runs
 
 `test/qm-bench.test.ts` is the contract: the gold answer scores 1.0 on both cases of every task, an empty or missing deliverable scores 0, restricted content in any output scores 0, and the follow-up turns change what the verifier expects.
 
+Rules the code follows
+
+The repo keeps rationale out of the code, so the reasons behind the parts that are not obvious from their names live here.
+
+- Every case regenerates from its number. All randomness goes through one seeded generator (mulberry32, since Math.random cannot be seeded), and each task mixes in its own constant so two tasks never share a stream. Dates are computed in UTC so a fixture never depends on the machine's timezone.
+- Name and company pools are small on purpose, so names recur and an agent has to match on more than one field. The same person is spelled differently across directory exports, and the expertise phrases in records differ from the words of the ask, so keyword matching misses.
+- Money in prose carries the value the text states: "$83.5k" states 83500, not 83490. EUR converts to USD in integer cents with half-cents rounded up, so a key never depends on floating-point rounding.
+- Verifiers never trust the shape of agent output. A missing, invalid or oddly typed deliverable scores a miss, never a crash, and the raw files stay in the record for anyone who wants to look. A check that scores NaN is a verifier bug and throws.
+- Gold solutions are exported beside each task but never placed on the task object, so nothing can hand one to a sandbox.
+- The events worlds scale session capacities to about 108% of each slot's demand so seats are scarce, and the reference solver's local search sets the top-two rate that the verifier's tolerance is measured against.
+- Case files are written through a path check that rejects absolute paths, backslashes and `..` segments, and a verifier reads only under `output/`.
+- Each case gets its own sandbox resource, set as its scope's default before the files are seeded, and retiring it afterwards removes the container, its network and its volume. A case is retried only when the turn threw a provider rate limit; any other failure is recorded as an execution failure and left out of the pass rate.
+- `test/qm-bench-oracle.test.ts` re-derives four tasks' keys from the visible files alone across twenty seeds, so a key a careful reader could not reproduce fails there instead of in a model run.
+
 Where a small model lands
 
 Claude Haiku 4.5 through the pi harness, all 32 cases: 10 passed. By tier, easy 8 of 10, medium 2 of 10, hard 0 of 12. The tiers were assigned from a longer run of six cases per task before the set was cut to two, so they describe what Haiku does over more attempts than this. The first version of this bench let Haiku through nearly half its cases and it swept the easy tier; every task it swept now carries the traps that beat it on the hard tier. The failures are the kind we want to train on. It takes its runway from the founder's postscript instead of the restated row the README points at, obeys a note in the payroll export that tells it to leave a pay run out, drops every invoice once a currency column appears, reads only one of a company's two threads, keeps the first tracking id it sees, writes "your 2025 experience" instead of the milestone the profile names, and ignores the append-only export's older rows. The same case can pass on one run and fail on the next, so a number from one case per task is noise; run all 32.

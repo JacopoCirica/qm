@@ -1,11 +1,9 @@
-/** A founder ask, the expertise phrases records use for it, and the cues an intro email must mention. */
 interface Topic {
   ask: string;
   phrases: string[];
   cues: string[];
 }
 
-/** Topics shared by both network tasks; phrases differ from the ask so keyword matching misses. */
 export const TOPICS: Topic[] = [
   {
     ask: "moving to usage-based pricing",

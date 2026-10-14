@@ -4,14 +4,12 @@ import type { Fixture } from "../../core/types.ts";
 import { greedy, improve, top2Rate } from "../../families/events-assign.ts";
 import { type Assignment, SLOTS, type World, assignKey, buildWorld, worldFiles } from "../../families/events.ts";
 
-/** Answer key: the world after registration changes, the fixed speaker seats, and the reference top-two rate. */
 export interface AssignKey {
   world: World;
   speakers: Array<[string, string]>;
   baselineTop2: number;
 }
 
-/** Changes 5% of registrations after the export is written, so the changes file overrides it. */
 function registrationChanges(r: Rng, world: World): Array<[string, string, string]> {
   const rows: Array<[string, string, string]> = [];
   for (const a of r.sample(world.attendees, Math.floor(world.attendees.length * 0.05))) {
@@ -24,19 +22,16 @@ function registrationChanges(r: Rng, world: World): Array<[string, string, strin
   return rows;
 }
 
-/** Speaker seats as assignment-map entries keyed attendee|slot, the form solver and verifier use. */
 export function fixedSeats(key: Pick<AssignKey, "world" | "speakers">): Assignment {
   const slotOf = new Map(key.world.sessions.map((s) => [s.id, s.slot] as const));
   return new Map(key.speakers.map(([attendee, session]) => [assignKey(attendee, slotOf.get(session)!), session]));
 }
 
-/** Reference solver: greedy with speakers fixed, then local search with them locked; sets the baseline. */
 export function solve(key: Pick<AssignKey, "world" | "speakers">): Assignment {
   const fixed = fixedSeats(key);
   return improve(key.world, greedy(key.world, fixed), new Set(fixed.keys()));
 }
 
-/** Builds a 9,000 to 12,000 attendee world with speakers and registration changes; the scale forces a script. */
 export function generate(seed: number): Fixture<AssignKey> {
   const r = rng(seed * 5657 + 8);
   const world = buildWorld(r, r.int(9000, 12000));

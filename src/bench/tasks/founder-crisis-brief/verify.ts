@@ -2,7 +2,6 @@ import { asArray, asRecord, close, f1, num, parseJson, str } from "../../core/te
 import type { Check, Outputs } from "../../core/types.ts";
 import type { CrisisKey } from "./generate.ts";
 
-/** Scores latest_mrr: the newest note's figure, or null plus both paths when the case plants a conflict. */
 function latestMrrScore(o: Record<string, unknown>, key: CrisisKey): number {
   const conflicts = asArray(o.conflicts).map(str);
   if (key.conflictPath === null) return conflicts.length === 0 && close(num(o.latest_mrr), key.latestMrr, 1) ? 1 : 0;
@@ -10,7 +9,6 @@ function latestMrrScore(o: Record<string, unknown>, key: CrisisKey): number {
   return o.latest_mrr === null && both ? 1 : 0;
 }
 
-/** Checks issue types, corrected runway, newest-note MRR, precedents, sources, summary ignored, next steps. */
 export async function verify(outputs: Outputs, key: CrisisKey): Promise<Check[]> {
   const o = asRecord(parseJson(await outputs.read("output/brief.json")));
   const sources = asArray(o.sources).map(str);
