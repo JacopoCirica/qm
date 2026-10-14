@@ -1,7 +1,8 @@
 import { type Rng, rng } from "../../core/rng.ts";
 import { csv } from "../../core/text.ts";
 import type { Fixture } from "../../core/types.ts";
-import { COMPANY_WORDS, addDays } from "../../core/world.ts";
+import { addDays } from "../../core/world.ts";
+import { companyNames, slugify } from "../../families/portfolio.ts";
 
 interface DocSpec {
   canonical: string;
@@ -66,19 +67,6 @@ function staleBankLetter(r: Rng): string {
   return `signed bank-letter.pdf\nDated: ${addDays(CLOSING, -r.int(91, 400))}\n`;
 }
 
-function slugify(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-}
-
-function packetNames(r: Rng, n: number): string[] {
-  const out = new Set<string>();
-  while (out.size < n) {
-    const base = r.pick(COMPANY_WORDS);
-    out.add(slugify(out.has(slugify(base)) ? `${base} ${r.pick(["Labs", "Systems", "Health", "Bio"])}` : base));
-  }
-  return [...out];
-}
-
 function roundChanges(r: Rng, companies: string[], rounds: Map<string, string>): string {
   const lines: Array<[string, string]> = [];
   for (const c of r.sample(companies, 40)) {
@@ -102,7 +90,7 @@ function fileName(r: Rng, name: string): string {
 
 export function generate(seed: number): Fixture<PacketKey> {
   const r = rng(seed * 1213 + 21);
-  const companies = packetNames(r, 280);
+  const companies = companyNames(r, 280).map(slugify);
   const rounds = new Map<string, string>(companies.map((c) => [c, r.chance(0.6) ? "safe" : "priced"]));
   const exported = new Map(rounds);
   const files: Record<string, string> = {
