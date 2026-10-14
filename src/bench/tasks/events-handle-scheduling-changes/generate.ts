@@ -64,7 +64,7 @@ export function generate(seed: number): Fixture<ChangesKey> {
     .filter((s) => !allCancelled.includes(s.id))
     .map((s) => {
       const cut = cuts.find((c) => c.id === s.id);
-      return cut ? { ...s, capacity: cut.to } : s;
+      return cut ? { ...s, capacity: cut.to } : { ...s };
     });
   const remaining = world.attendees
     .filter((a) => !dropped.includes(a.id))
@@ -139,10 +139,8 @@ export function generate(seed: number): Fixture<ChangesKey> {
         `${4 + cuts.length}. ${
           finalWorld.sessions
             .filter(
-              (s, i) =>
-                s.capacity !== world.sessions.find((w) => w.id === s.id)!.capacity &&
-                !cuts.some((c) => c.id === s.id) &&
-                i >= 0,
+              (s) =>
+                s.capacity !== world.sessions.find((w) => w.id === s.id)!.capacity && !cuts.some((c) => c.id === s.id),
             )
             .map((s) => `${s.id} moved to a bigger room and now holds ${s.capacity}`)
             .join("; ") || "No other room changes"
